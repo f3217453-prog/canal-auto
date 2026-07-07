@@ -37,7 +37,7 @@ YOUTUBE_CLIENT_SECRET = os.environ["YOUTUBE_CLIENT_SECRET"]
 YOUTUBE_REFRESH_TOKEN = os.environ["YOUTUBE_REFRESH_TOKEN"]
 
 TEMAS = [
-    "horror stories", "crime storys ", " interesting stories",
+    "horror stories", "crime stories ", " interesting stories",
     "fun facts", "mysteries", "ghost stories",
     "monsters and creatures ", "fantasy stories", "haunted houses", "mysteries with no solution""world records""top 10 most dangerous and rare animals"
 ]
