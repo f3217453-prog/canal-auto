@@ -37,9 +37,10 @@ YOUTUBE_CLIENT_SECRET = os.environ["YOUTUBE_CLIENT_SECRET"]
 YOUTUBE_REFRESH_TOKEN = os.environ["YOUTUBE_REFRESH_TOKEN"]
 
 TEMAS = [
-    "horror stories", "crime stories ", " interesting stories",
-    "fun facts", "mysteries", "ghost stories",
-    "monsters and creatures ", "fantasy stories", "haunted houses", "mysteries with no solution""world records""top 10 most dangerous and rare animals"
+    "unsolved disappearances", "cold case murders", "true crime mysteries",
+    "serial killers caught by mistake", "unexplained deaths", "missing persons cases",
+    "crimes solved by DNA decades later", "haunting unsolved mysteries",
+    "criminal masterminds caught", "strange true crime cases"
 ]
 
 VOZ = "en-US-GuyNeural"  # voz en inglés, natural
@@ -52,13 +53,14 @@ RESOLUCION = (1080, 1920)  # formato vertical (Shorts/Reels/TikTok)
 def generar_guion(tema: str) -> str:
     url = (
         "https://generativelanguage.googleapis.com/v1beta/models/"
-      f"gemini-3.5-flash:generateContent?key={GEMINI_API_KEY}"
-
+        f"gemini-3.5-flash:generateContent?key={GEMINI_API_KEY}"
     )
     prompt = textwrap.dedent(f"""
-        Write a 55-second script in English, curious and dynamic tone,
-        with 5 little-known facts about: {tema}.
-        Short sentences. Strong hook in the first sentence.
+        Write a 55-second true crime / mystery narration script in English,
+        suspenseful and gripping tone, about: {tema}.
+        Focus on the intrigue, timeline, and twist - not graphic violence or gore.
+        Short sentences. Strong hook in the first sentence that creates curiosity.
+        End with an unresolved question or chilling twist.
         Only the script, no titles or numbering, as if narrated by a single voice.
     """)
     body = {"contents": [{"parts": [{"text": prompt}]}]}
@@ -96,21 +98,31 @@ def transcribir(audio_path: str):
 def descargar_clips(tema: str, cantidad: int = 6, carpeta: str = "clips"):
     os.makedirs(carpeta, exist_ok=True)
     headers = {"Authorization": PEXELS_API_KEY}
-    url = f"https://api.pexels.com/videos/search?query={tema}&per_page={cantidad}&orientation=portrait"
-    r = requests.get(url, headers=headers, timeout=30)
-    r.raise_for_status()
-    videos = r.json().get("videos", [])
+    # Pexels no tiene clips de casos reales específicos; usamos b-roll de ambiente
+    # tipo "true crime" (calles de noche, oficinas de detective, luces de policía, etc.)
+    consultas_ambiente = [
+        "dark street night fog", "police lights night city",
+        "old detective office", "rain window night moody",
+        "empty road night car headlights", "vintage photographs desk"
+    ]
+    clips_por_consulta = max(1, cantidad // len(consultas_ambiente))
     rutas = []
-    for i, v in enumerate(videos):
-        # elegir el archivo de menor resolución razonable para ahorrar espacio/tiempo
-        archivos = sorted(v["video_files"], key=lambda f: f.get("width", 0))
-        enlace = archivos[len(archivos)//2]["link"]
-        destino = f"{carpeta}/clip_{i}.mp4"
-        with requests.get(enlace, stream=True, timeout=60) as resp:
-            with open(destino, "wb") as f:
-                for chunk in resp.iter_content(chunk_size=8192):
-                    f.write(chunk)
-        rutas.append(destino)
+    indice_global = 0
+    for consulta in consultas_ambiente:
+        url = f"https://api.pexels.com/videos/search?query={consulta}&per_page={clips_por_consulta}&orientation=portrait"
+        r = requests.get(url, headers=headers, timeout=30)
+        r.raise_for_status()
+        videos = r.json().get("videos", [])
+        for v in videos:
+            archivos = sorted(v["video_files"], key=lambda f: f.get("width", 0))
+            enlace = archivos[len(archivos)//2]["link"]
+            destino = f"{carpeta}/clip_{indice_global}.mp4"
+            with requests.get(enlace, stream=True, timeout=60) as resp:
+                with open(destino, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=8192):
+                        f.write(chunk)
+            rutas.append(destino)
+            indice_global += 1
     return rutas
 
 
@@ -198,8 +210,8 @@ def main():
     clips = descargar_clips(tema)
     video_path = armar_video(clips, audio_path, segmentos)
 
-    titulo = f"5 SHOCKING Facts About {tema} 😱"
-    descripcion = f"{guion}\n\n#didyouknow #{tema.replace(' ', '')} #shorts"
+    titulo = f"The Unsolved Case of {tema.title()} 🔎"
+    descripcion = f"{guion}\n\n#truecrime #mystery #unsolved #shorts"
     subir_youtube(video_path, titulo, descripcion)
 
 
