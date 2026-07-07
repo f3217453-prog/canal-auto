@@ -37,9 +37,9 @@ YOUTUBE_CLIENT_SECRET = os.environ["YOUTUBE_CLIENT_SECRET"]
 YOUTUBE_REFRESH_TOKEN = os.environ["YOUTUBE_REFRESH_TOKEN"]
 
 TEMAS = [
-    "Ancient Egypt", "Space and astronomy", "Deep oceans",
-    "History of Rome", "Strange animals", "The human brain",
-    "Lost civilizations", "Weird science", "Vikings", "Dinosaurs"
+    "horror stories", "crime storys ", " interesting stories",
+    "fun facts", "mysteries", "ghost stories",
+    "monsters and creatures ", "fantasy stories", "haunted houses", "mysteries with no solution""world records""top 10 most dangerous and rare animals"
 ]
 
 VOZ = "en-US-GuyNeural"  # voz en inglés, natural
