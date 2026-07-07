@@ -2,7 +2,7 @@ name: Video diario automático
 
 on:
   schedule:
-    - cron: "0 14 * * *"   # todos los días a las 14:00 UTC (ajusta a tu hora)
+    - cron: "0 19 * * *"   # todos los días a las 19:00 UTC (ajusta a tu hora)
   workflow_dispatch: {}    # también puedes darle "Run workflow" a mano desde el móvil
 
 jobs:
