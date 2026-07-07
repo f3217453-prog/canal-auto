@@ -52,7 +52,8 @@ RESOLUCION = (1080, 1920)  # formato vertical (Shorts/Reels/TikTok)
 def generar_guion(tema: str) -> str:
     url = (
         "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+      f"gemini-3.5-flash:generateContent?key={GEMINI_API_KEY}"
+
     )
     prompt = textwrap.dedent(f"""
         Write a 55-second script in English, curious and dynamic tone,
