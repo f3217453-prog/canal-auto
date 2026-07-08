@@ -1,18 +1,10 @@
 """
-Pipeline 100% automático para canal de datos curiosos.
-Se ejecuta solo, sin intervención humana, disparado por GitHub Actions.
-
-Pasos:
-1. Genera un guion con Gemini (API gratuita)
-2. Convierte el guion en audio con edge-tts (gratis, sin límite)
-3. Transcribe el audio con timestamps usando whisper (gratis, local)
-4. Descarga clips de video relacionados desde Pexels (API gratuita)
-5. Arma el video final con moviepy (clips + audio + subtítulos)
-6. Sube el video a YouTube usando la API de YouTube Data v3
+Pipeline 100% automático para Shorts (canal multi-nicho).
+Se ejecuta 2 veces al día (1pm y 11pm), disparado por GitHub Actions.
+Nichos: Horror Stories, True Crime, World Records, Top 10.
 """
 
 import os
-import json
 import random
 import textwrap
 import requests
@@ -27,41 +19,109 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-# ------------------------------------------------------------------
-# CONFIGURACIÓN (todo viene de variables de entorno / GitHub Secrets)
-# ------------------------------------------------------------------
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 PEXELS_API_KEY = os.environ["PEXELS_API_KEY"]
 YOUTUBE_CLIENT_ID = os.environ["YOUTUBE_CLIENT_ID"]
 YOUTUBE_CLIENT_SECRET = os.environ["YOUTUBE_CLIENT_SECRET"]
 YOUTUBE_REFRESH_TOKEN = os.environ["YOUTUBE_REFRESH_TOKEN"]
 
-TEMAS = [
-    "unsolved disappearances", "cold case murders", "true crime mysteries",
-    "serial killers caught by mistake", "unexplained deaths", "missing persons cases",
-    "crimes solved by DNA decades later", "haunting unsolved mysteries",
-    "criminal masterminds caught", "strange true crime cases"
-]
+VOZ = "en-US-GuyNeural"
+RESOLUCION = (1080, 1920)
 
-VOZ = "en-US-GuyNeural"  # voz en inglés, natural
-RESOLUCION = (1080, 1920)  # formato vertical (Shorts/Reels/TikTok)
+NICHOS = {
+    "horror": {
+        "temas": [
+            "a ghost story set in an abandoned house",
+            "a chilling creepypasta about something in the woods",
+            "a haunted house with a dark history",
+            "an urban legend that still scares people today",
+            "a real reported ghost sighting with no explanation",
+        ],
+        "instruccion": (
+            "Write it as a scary, atmospheric horror narration. Build dread "
+            "slowly, use sensory details, end on a chilling unresolved note."
+        ),
+        "tags": ["horror", "scary story", "creepypasta", "shorts"],
+    },
+    "true_crime": {
+        "temas": [
+            "an unsolved disappearance that baffled investigators",
+            "a cold case cracked open decades later",
+            "a criminal who evaded capture in a shocking way",
+            "a mysterious death many still question",
+        ],
+        "instruccion": (
+            "Write it as a suspenseful true crime narration. Focus on the "
+            "intrigue and timeline, not graphic violence. End with a twist "
+            "or unresolved question."
+        ),
+        "tags": ["truecrime", "mystery", "unsolved", "shorts"],
+    },
+    "world_records": {
+        "temas": [
+            "the most extreme world record ever achieved",
+            "a bizarre Guinness World Record most people don't know about",
+            "a record that seems impossible but is completely real",
+            "the fastest, biggest, or strangest record in its category",
+        ],
+        "instruccion": (
+            "Write it as an exciting, fast-paced narration about a real "
+            "world record. Use vivid numbers and comparisons to make it "
+            "feel astonishing."
+        ),
+        "tags": ["worldrecord", "guinnessworldrecords", "amazing", "shorts"],
+    },
+    "top10": {
+        "temas": [
+            "top 10 most dangerous places on Earth",
+            "top 10 strangest animals in the world",
+            "top 10 mysteries science still can't explain",
+            "top 10 most valuable things ever discovered",
+        ],
+        "instruccion": (
+            "Write it as a punchy top 10 countdown narration. Quick hits, "
+            "one sentence per fact building up to the most shocking one "
+            "at the end."
+        ),
+        "tags": ["top10", "facts", "ranking", "shorts"],
+    },
+}
+
+CONSULTAS_AMBIENTE = {
+    "horror": [
+        "dark forest fog night", "abandoned house interior", "old hallway dark",
+        "candle flame dark room", "creepy basement", "foggy graveyard night",
+        "old door creaking", "flashlight dark room",
+    ],
+    "true_crime": [
+        "dark street night fog", "police lights night city", "old detective office",
+        "rain window night moody", "empty road night headlights", "newspaper archive",
+        "typewriter old paper", "evidence board string",
+    ],
+    "world_records": [
+        "stadium crowd aerial", "extreme sports action", "fast car racing",
+        "mountain climbing extreme", "ocean waves aerial", "city skyline aerial",
+        "athlete running slow motion", "fireworks night sky",
+    ],
+    "top10": [
+        "nature landscape aerial", "city skyline timelapse", "ocean underwater",
+        "desert landscape aerial", "mountain range aerial", "wildlife animals",
+        "space stars night sky", "waterfall nature",
+    ],
+}
 
 
-# ------------------------------------------------------------------
-# 1. GENERAR GUION CON GEMINI (capa gratuita)
-# ------------------------------------------------------------------
-def generar_guion(tema: str) -> str:
+def generar_guion(tema: str, instruccion: str) -> str:
     url = (
         "https://generativelanguage.googleapis.com/v1beta/models/"
         f"gemini-3.5-flash:generateContent?key={GEMINI_API_KEY}"
     )
     prompt = textwrap.dedent(f"""
-        Write a 55-second true crime / mystery narration script in English,
-        suspenseful and gripping tone, about: {tema}.
-        Focus on the intrigue, timeline, and twist - not graphic violence or gore.
-        Short sentences. Strong hook in the first sentence that creates curiosity.
-        End with an unresolved question or chilling twist.
-        Only the script, no titles or numbering, as if narrated by a single voice.
+        Write a 55-second narration script in English about: {tema}.
+        {instruccion}
+        Short sentences. Strong hook in the first sentence.
+        Only the narration text, no titles or numbering, as if narrated by
+        a single voice.
     """)
     body = {"contents": [{"parts": [{"text": prompt}]}]}
     r = requests.post(url, json=body, timeout=60)
@@ -70,9 +130,6 @@ def generar_guion(tema: str) -> str:
     return data["candidates"][0]["content"]["parts"][0]["text"].strip()
 
 
-# ------------------------------------------------------------------
-# 2. GUION -> AUDIO (edge-tts, gratis)
-# ------------------------------------------------------------------
 async def _tts(texto: str, salida: str):
     comunicador = edge_tts.Communicate(texto, VOZ)
     await comunicador.save(salida)
@@ -83,137 +140,25 @@ def generar_audio(texto: str, salida: str = "audio.mp3"):
     return salida
 
 
-# ------------------------------------------------------------------
-# 3. AUDIO -> SUBTÍTULOS CON TIMESTAMPS (whisper, gratis, local)
-# ------------------------------------------------------------------
 def transcribir(audio_path: str):
     modelo = whisper.load_model("base")
     resultado = modelo.transcribe(audio_path, language="en")
-    return resultado["segments"]  # cada uno: start, end, text
+    return resultado["segments"]
 
 
-# ------------------------------------------------------------------
-# 4. BUSCAR Y DESCARGAR CLIPS EN PEXELS (gratis)
-# ------------------------------------------------------------------
-def descargar_clips(tema: str, cantidad: int = 6, carpeta: str = "clips"):
+def descargar_clips(nicho: str, carpeta: str = "clips"):
     os.makedirs(carpeta, exist_ok=True)
     headers = {"Authorization": PEXELS_API_KEY}
-    # Pexels no tiene clips de casos reales específicos; usamos b-roll de ambiente
-    # tipo "true crime" (calles de noche, oficinas de detective, luces de policía, etc.)
-    consultas_ambiente = [
-        "dark street night fog", "police lights night city",
-        "old detective office", "rain window night moody",
-        "empty road night car headlights", "vintage photographs desk"
-    ]
-    clips_por_consulta = max(1, cantidad // len(consultas_ambiente))
+    consultas = CONSULTAS_AMBIENTE[nicho]
     rutas = []
     indice_global = 0
-    for consulta in consultas_ambiente:
-        url = f"https://api.pexels.com/videos/search?query={consulta}&per_page={clips_por_consulta}&orientation=portrait"
-        r = requests.get(url, headers=headers, timeout=30)
-        r.raise_for_status()
+    for consulta in consultas:
+        url = f"https://api.pexels.com/videos/search?query={consulta}&per_page=4&orientation=portrait"
+        try:
+            r = requests.get(url, headers=headers, timeout=30)
+            r.raise_for_status()
+        except requests.exceptions.RequestException:
+            continue
         videos = r.json().get("videos", [])
         for v in videos:
-            archivos = sorted(v["video_files"], key=lambda f: f.get("width", 0))
-            enlace = archivos[len(archivos)//2]["link"]
-            destino = f"{carpeta}/clip_{indice_global}.mp4"
-            with requests.get(enlace, stream=True, timeout=60) as resp:
-                with open(destino, "wb") as f:
-                    for chunk in resp.iter_content(chunk_size=8192):
-                        f.write(chunk)
-            rutas.append(destino)
-            indice_global += 1
-    return rutas
-
-
-# ------------------------------------------------------------------
-# 5. ARMAR EL VIDEO FINAL (moviepy)
-# ------------------------------------------------------------------
-def armar_video(clips_rutas, audio_path, segmentos, salida="video_final.mp4"):
-    audio = AudioFileClip(audio_path)
-    duracion_total = audio.duration
-
-    # repetir/recortar clips hasta cubrir la duración total
-    clips = []
-    tiempo_acumulado = 0
-    i = 0
-    while tiempo_acumulado < duracion_total:
-        ruta = clips_rutas[i % len(clips_rutas)]
-        c = VideoFileClip(ruta).without_audio()
-        c = c.resize(height=RESOLUCION[1]).crop(
-            x_center=c.w/2, width=RESOLUCION[0]
-        )
-        restante = duracion_total - tiempo_acumulado
-        c = c.subclip(0, min(c.duration, restante, 6))
-        clips.append(c)
-        tiempo_acumulado += c.duration
-        i += 1
-
-    video_base = concatenate_videoclips(clips, method="compose")
-    video_base = video_base.set_audio(audio)
-
-    # subtítulos quemados en el video, segmento por segmento
-    subtitulos = []
-    for seg in segmentos:
-        txt = TextClip(
-            seg["text"].strip(), fontsize=60, color="white",
-            font="DejaVu-Sans-Bold", stroke_color="black", stroke_width=2,
-            size=(RESOLUCION[0]-100, None), method="caption"
-        ).set_start(seg["start"]).set_end(seg["end"]).set_position(("center", "bottom"))
-        subtitulos.append(txt)
-
-    final = CompositeVideoClip([video_base, *subtitulos])
-    final = final.set_duration(duracion_total)
-    final.write_videofile(salida, fps=30, codec="libx264", audio_codec="aac")
-    return salida
-
-
-# ------------------------------------------------------------------
-# 6. SUBIR A YOUTUBE
-# ------------------------------------------------------------------
-def subir_youtube(video_path: str, titulo: str, descripcion: str):
-    creds = Credentials(
-        token=None,
-        refresh_token=YOUTUBE_REFRESH_TOKEN,
-        client_id=YOUTUBE_CLIENT_ID,
-        client_secret=YOUTUBE_CLIENT_SECRET,
-        token_uri="https://oauth2.googleapis.com/token",
-    )
-    youtube = build("youtube", "v3", credentials=creds)
-    body = {
-        "snippet": {
-            "title": titulo,
-            "description": descripcion,
-            "tags": ["datos curiosos", "historia", "shorts"],
-            "categoryId": "27",
-        },
-        "status": {"privacyStatus": "public"},
-    }
-    media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
-    request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
-    response = request.execute()
-    print("Subido:", response.get("id"))
-
-
-# ------------------------------------------------------------------
-# MAIN
-# ------------------------------------------------------------------
-def main():
-    tema = random.choice(TEMAS)
-    print("Tema elegido:", tema)
-
-    guion = generar_guion(tema)
-    print("Guion generado:\n", guion)
-
-    audio_path = generar_audio(guion)
-    segmentos = transcribir(audio_path)
-    clips = descargar_clips(tema)
-    video_path = armar_video(clips, audio_path, segmentos)
-
-    titulo = f"The Unsolved Case of {tema.title()} 🔎"
-    descripcion = f"{guion}\n\n#truecrime #mystery #unsolved #shorts"
-    subir_youtube(video_path, titulo, descripcion)
-
-
-if __name__ == "__main__":
-    main()
+            archivos = sorted(v["video
