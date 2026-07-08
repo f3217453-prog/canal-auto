@@ -1,9 +1,9 @@
-name: Shorts (2x al día)
+name: Shorts 2x al dia
 
 on:
   schedule:
-    - cron: "0 11 * * *"   # 1:00 PM hora España (verano, UTC+2)
-    - cron: "0 21 * * *"   # 11:00 PM hora España (verano, UTC+2)
+    - cron: "0 11 * * *"
+    - cron: "0 21 * * *"
   workflow_dispatch: {}
 
 jobs:
@@ -19,16 +19,15 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Instalar ffmpeg (necesario para audio/video)
+      - name: Instalar ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: Instalar ImageMagick (necesario para subtítulos)
+      - name: Instalar ImageMagick
         run: |
           sudo apt-get install -y imagemagick
           sudo sed -i 's/rights="none" pattern="@\*"/rights="read|write" pattern="@*"/' /etc/ImageMagick-6/policy.xml || true
-          sudo sed -i 's/rights="none" pattern="PS"/rights="read|write" pattern="PS"/' /etc/ImageMagick-6/policy.xml || true
 
-      - name: Instalar dependencias de Python
+      - name: Instalar dependencias
         run: pip install -r requirements.txt
 
       - name: Ejecutar el pipeline completo
@@ -38,6 +37,5 @@ jobs:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-                    HF_TOKEN: ${{ secrets.HF_TOKEN }}
-
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: python main.py
