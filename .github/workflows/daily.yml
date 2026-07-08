@@ -1,12 +1,13 @@
-name: Video diario automático
+name: Shorts (2x al día)
 
 on:
   schedule:
-    - cron: "0 19 * * *"   # todos los días a las 19:00 UTC (ajusta a tu hora)
-  workflow_dispatch: {}    # también puedes darle "Run workflow" a mano desde el móvil
+    - cron: "0 11 * * *"   # 1:00 PM hora España (verano, UTC+2)
+    - cron: "0 21 * * *"   # 11:00 PM hora España (verano, UTC+2)
+  workflow_dispatch: {}
 
 jobs:
-  crear-video:
+  crear-short:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
