@@ -152,20 +152,25 @@ def transcribir(audio_path: str):
     return resultado["segments"]
 
 
-def descargar_clips_largos(nicho: str, carpeta: str = "clips_largo"):
-    os.makedirs(carpeta, exist_ok=True)
-    headers = {"Authorization": PEXELS_API_KEY}
-    consultas = CONSULTAS_AMBIENTE[nicho]
+CONSULTAS_RESPALDO = [
+    "cinematic dark background", "abstract dark texture", "smoke slow motion dark",
+    "clouds timelapse dark", "light rays dark room", "particles floating dark",
+]
+
+
+def _descargar_desde_consultas(consultas, headers, carpeta, indice_inicial, por_consulta=6):
     rutas = []
-    indice_global = 0
+    indice_global = indice_inicial
     for consulta in consultas:
-        url = f"https://api.pexels.com/videos/search?query={consulta}&per_page=5&orientation=landscape"
+        url = f"https://api.pexels.com/videos/search?query={consulta}&per_page={por_consulta}"
         try:
             r = requests.get(url, headers=headers, timeout=30)
             r.raise_for_status()
-        except requests.exceptions.RequestException:
+        except requests.exceptions.RequestException as e:
+            print(f"Aviso: falló búsqueda '{consulta}': {e}")
             continue
         videos = r.json().get("videos", [])
+        print(f"Búsqueda '{consulta}': {len(videos)} resultados")
         for v in videos:
             archivos = sorted(v["video_files"], key=lambda f: f.get("width", 0))
             if not archivos:
@@ -179,8 +184,27 @@ def descargar_clips_largos(nicho: str, carpeta: str = "clips_largo"):
                             f.write(chunk)
                 rutas.append(destino)
                 indice_global += 1
-            except requests.exceptions.RequestException:
+            except requests.exceptions.RequestException as e:
+                print(f"Aviso: falló descarga de un clip: {e}")
                 continue
+    return rutas, indice_global
+
+
+def descargar_clips_largos(nicho: str, carpeta: str = "clips_largo"):
+    os.makedirs(carpeta, exist_ok=True)
+    headers = {"Authorization": PEXELS_API_KEY}
+    consultas = CONSULTAS_AMBIENTE[nicho]
+
+    rutas, siguiente_indice = _descargar_desde_consultas(consultas, headers, carpeta, 0, por_consulta=6)
+
+    if len(rutas) < 25:
+        print(f"Solo {len(rutas)} clips del nicho, completando con búsquedas de respaldo...")
+        extra, siguiente_indice = _descargar_desde_consultas(
+            CONSULTAS_RESPALDO, headers, carpeta, siguiente_indice, por_consulta=8
+        )
+        rutas.extend(extra)
+
+    print(f"Total de clips descargados (largo): {len(rutas)}")
     return rutas
 
 
@@ -218,11 +242,12 @@ def armar_video_largo(clips_rutas, audio_path, segmentos, salida="video_largo_fi
             c.close()
             continue
 
-        c = c.resize(height=RESOLUCION[1])
-        if c.w > RESOLUCION[0]:
-            c = c.crop(x_center=c.w / 2, width=RESOLUCION[0])
-        elif c.w < RESOLUCION[0]:
-            c = c.resize(width=RESOLUCION[0])
+        escala = max(RESOLUCION[0] / c.w, RESOLUCION[1] / c.h)
+        c = c.resize(escala)
+        c = c.crop(
+            x_center=c.w / 2, y_center=c.h / 2,
+            width=RESOLUCION[0], height=RESOLUCION[1]
+        )
 
         restante = duracion_total - tiempo_acumulado
         duracion_clip = min(c.duration, restante, random.uniform(4.0, 8.0))
