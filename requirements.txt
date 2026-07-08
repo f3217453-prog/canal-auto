@@ -2,6 +2,8 @@ requests
 edge-tts
 openai-whisper
 moviepy==1.0.3
-Pillow<10
+Pillow==9.5.0
 google-auth
 google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2
