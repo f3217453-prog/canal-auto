@@ -167,7 +167,7 @@ IMPORTANT: ENGLISH ONLY. Return ONLY valid JSON, no markdown, no backticks:
                     contenido = json.loads(texto)
                     palabras = len(contenido.get("guion", "").split())
                     print(f"Guion: {palabras} palabras")
-                    if palabras < 1400:
+                    if palabras < 1800:
                         print(f"Muy corto, extendiendo...")
                         contenido["guion"] = generar_guion_extension(
                             tema_info["tema"], contenido["guion"]
