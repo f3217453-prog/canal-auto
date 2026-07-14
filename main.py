@@ -81,7 +81,7 @@ Create a short horror story script with:
 4. 3 vivid scene descriptions for AI image generation
 5. A hook line (first sentence that stops the scroll)
 
-IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 150 words minimum. Write enough content to fill 60-70 seconds when read aloud. DO NOT write less than 150 words in the guion field.
+IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 200 words minimum. Write enough content to fill 75-90 seconds when read aloud. DO NOT write less than 200 words. Include specific details, examples, and dramatic moments to fill the time.
 Return ONLY valid JSON, no markdown, no backticks:
 {
   "personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
@@ -112,7 +112,7 @@ Create a gripping true crime story with:
 4. 3 vivid atmospheric scene descriptions for AI image generation
 5. A hook line (first sentence that stops the scroll)
 
-IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 150 words minimum. Write enough content to fill 60-70 seconds when read aloud. DO NOT write less than 150 words in the guion field.
+IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 200 words minimum. Write enough content to fill 75-90 seconds when read aloud. DO NOT write less than 200 words. Include specific details, examples, and dramatic moments to fill the time.
 Return ONLY valid JSON, no markdown, no backticks:
 {
   "personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
@@ -143,7 +143,7 @@ Create a world record script with:
 4. 3 dramatic scene descriptions for AI image generation
 5. A hook line (first sentence that stops the scroll)
 
-IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 150 words minimum. Write enough content to fill 60-70 seconds when read aloud. DO NOT write less than 150 words in the guion field.
+IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 200 words minimum. Write enough content to fill 75-90 seconds when read aloud. DO NOT write less than 200 words. Include specific details, examples, and dramatic moments to fill the time.
 Return ONLY valid JSON, no markdown, no backticks:
 {
   "personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
@@ -174,7 +174,7 @@ Create a top 10 countdown script with:
 4. 3 vivid scene descriptions for AI image generation
 5. A hook line (first sentence that stops the scroll)
 
-IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 150 words minimum. Write enough content to fill 60-70 seconds when read aloud. DO NOT write less than 150 words in the guion field.
+IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 200 words minimum. Write enough content to fill 75-90 seconds when read aloud. DO NOT write less than 200 words. Include specific details, examples, and dramatic moments to fill the time.
 Return ONLY valid JSON, no markdown, no backticks:
 {
   "personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
@@ -205,7 +205,7 @@ Create a script about an incredible lesser-known historical fact with:
 4. 3 vivid scene descriptions for AI image generation
 5. A hook line (first sentence that stops the scroll)
 
-IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 150 words minimum. Write enough content to fill 60-70 seconds when read aloud. DO NOT write less than 150 words in the guion field.
+IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 200 words minimum. Write enough content to fill 75-90 seconds when read aloud. DO NOT write less than 200 words. Include specific details, examples, and dramatic moments to fill the time.
 Return ONLY valid JSON, no markdown, no backticks:
 {
   "personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
@@ -236,7 +236,7 @@ Create a script about a mind-blowing interesting fact with:
 4. 3 vivid scene descriptions for AI image generation
 5. A hook line (first sentence that stops the scroll)
 
-IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 150 words minimum. Write enough content to fill 60-70 seconds when read aloud. DO NOT write less than 150 words in the guion field.
+IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 200 words minimum. Write enough content to fill 75-90 seconds when read aloud. DO NOT write less than 200 words. Include specific details, examples, and dramatic moments to fill the time.
 Return ONLY valid JSON, no markdown, no backticks:
 {
   "personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
@@ -298,7 +298,7 @@ def generar_contenido(nicho: str) -> dict:
     prompt_sistema = NICHOS[nicho]["prompt_sistema"]
     body = {
         "contents": [{"parts": [{"text": prompt_sistema}]}],
-        "generationConfig": {"temperature": 0.9, "maxOutputTokens": 2000}
+        "generationConfig": {"temperature": 0.9, "maxOutputTokens": 3000}
     }
     for modelo in MODELOS_GEMINI:
         for intento in range(3):
