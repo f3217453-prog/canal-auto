@@ -155,7 +155,7 @@ Also create:
 - A setting (modern tech environment)
 - 3 visual scene descriptions for AI image generation (tech focused, professional)
 
-IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 150 words minimum. Write enough content to fill 60-70 seconds when read aloud. DO NOT write less than 150 words.
+IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 200 words minimum. Write enough content to fill 75-90 seconds when read aloud. DO NOT write less than 200 words. Be specific, use real examples, and fill every second with valuable content.
 Return ONLY valid JSON, no markdown, no backticks:
 {{
   "personaje": {{"nombre": "...", "descripcion": "...", "personalidad": "tech savvy, excited, relatable"}},
@@ -169,7 +169,7 @@ Return ONLY valid JSON, no markdown, no backticks:
 
     body = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.95, "maxOutputTokens": 1500}
+        "generationConfig": {"temperature": 0.95, "maxOutputTokens": 3000}
     }
 
     for modelo in MODELOS_GEMINI:
