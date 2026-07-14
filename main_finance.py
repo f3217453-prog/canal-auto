@@ -182,7 +182,7 @@ Return ONLY valid JSON, no markdown, no backticks:
                     contenido = json.loads(texto)
                     palabras = len(contenido.get("guion", "").split())
                     print(f"Guion generado: {palabras} palabras")
-                    if palabras < 2000:
+                    if palabras < 2500:
                         print(f"Guion corto ({palabras} palabras), extendiendo...")
                         contenido["guion"] = generar_guion_extension(negocio, contenido["guion"])
                         print(f"Guion extendido: {len(contenido['guion'].split())} palabras")
