@@ -81,7 +81,7 @@ Write a gripping 13-minute horror documentary script in ENGLISH ONLY with:
 4. Dialogue-like narration that feels personal and real
 5. 4 vivid scene descriptions for AI image generation
 
-IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 2000 words. This is for a 13-minute video. DO NOT stop writing until you reach 2000 words.
+IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 2500 words. This is for a 15-minute video. DO NOT stop writing until you reach 2500 words. Include detailed analysis, multiple examples, and rich descriptions.
 Return ONLY valid JSON, no markdown, no backticks:
 {
   "personaje": {"nombre": "...", "descripcion": "...", "backstory": "..."},
@@ -350,7 +350,7 @@ def generar_contenido(nicho: str) -> dict:
                     # Verificar que el guion sea suficientemente largo
                     palabras = len(contenido.get("guion", "").split())
                     print(f"Guion generado: {palabras} palabras")
-                    if palabras < 1500:
+                    if palabras < 2000:
                         print(f"Guion muy corto ({palabras} palabras), extendiendo...")
                         contenido["guion"] = generar_guion_extension(nicho, contenido["guion"])
                         palabras_final = len(contenido["guion"].split())
