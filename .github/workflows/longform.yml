@@ -8,7 +8,7 @@ on:
 jobs:
   crear-video-largo:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - name: Clonar repositorio
         uses: actions/checkout@v4
