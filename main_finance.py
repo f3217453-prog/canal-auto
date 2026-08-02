@@ -88,7 +88,8 @@ CONSULTAS_RESPALDO = [
 
 def generar_guion_extension(negocio: str, guion_corto: str) -> str:
     palabras_actuales = len(guion_corto.split())
-    palabras_necesarias = 3000 - palabras_actuales
+    palabras_necesarias = 1500-1800 words
+- palabras_actuales
     prompt = f"""You are a financial documentary writer.
 The following script about {negocio} is too short ({palabras_actuales} words).
 Extend it by {palabras_necesarias} more words IN ENGLISH ONLY.
@@ -120,7 +121,7 @@ Return ONLY the complete extended narration, no JSON, no titles:
 def generar_contenido(negocio: str) -> dict:
     prompt = f"""You are a professional financial documentary writer at the level of the YouTube channel "Mr. Finance".
 
-Write a detailed 22-minute documentary script IN ENGLISH ONLY about: "The Economics of Owning {negocio}"
+Write a detailed 12-minute documentary script IN ENGLISH ONLY about: "The Economics of Owning {negocio}"
 
 Structure (follow this exactly):
 1. HOOK (1 min): Start with a shocking financial fact about this business that most people don't know
