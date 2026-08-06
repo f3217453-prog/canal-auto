@@ -9,8 +9,10 @@ Mejoras:
 - Imagenes IA con personajes
 - 6 nichos: Horror, True Crime, World Records, Top 10, History, Science Facts
 - Sin pantalla negra, muchos clips variados
-"""
 
+NOTA: nicho fijado a "horror" (antes era random.choice) para mantener
+consistencia tematica del canal.
+"""
 import os
 import io
 import re
@@ -21,7 +23,6 @@ import asyncio
 import json
 import edge_tts
 import whisper
-
 from PIL import Image, ImageDraw, ImageFont
 from moviepy.editor import (
     VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip,
@@ -82,15 +83,16 @@ Create a short horror story script with:
 5. A hook line (first sentence that stops the scroll)
 
 IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 200 words minimum. Write enough content to fill 75-90 seconds when read aloud. DO NOT write less than 200 words. Include specific details, examples, and dramatic moments to fill the time.
+
 Return ONLY valid JSON, no markdown, no backticks:
 {
-  "personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
-  "lugar": {"nombre": "...", "descripcion": "..."},
-  "hook": "...(one shocking first sentence)...",
-  "guion": "...(narration script in ENGLISH, MINIMUM 150 words, about 60-70 seconds when read aloud)...",
-  "escenas": ["scene 1", "scene 2", "scene 3"],
-  "titulo": "...(viral YouTube title in ENGLISH with emoji)...",
-  "tags": ["horror", "scary", "creepypasta", "shorts"]
+"personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
+"lugar": {"nombre": "...", "descripcion": "..."},
+"hook": "...(one shocking first sentence)...",
+"guion": "...(narration script in ENGLISH, MINIMUM 150 words, about 60-70 seconds when read aloud)...",
+"escenas": ["scene 1", "scene 2", "scene 3"],
+"titulo": "...(viral YouTube title in ENGLISH with emoji)...",
+"tags": ["horror", "scary", "creepypasta", "shorts"]
 }""",
         "consultas_broll": [
             "dark forest fog night", "abandoned house interior",
@@ -113,15 +115,16 @@ Create a gripping true crime story with:
 5. A hook line (first sentence that stops the scroll)
 
 IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 200 words minimum. Write enough content to fill 75-90 seconds when read aloud. DO NOT write less than 200 words. Include specific details, examples, and dramatic moments to fill the time.
+
 Return ONLY valid JSON, no markdown, no backticks:
 {
-  "personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
-  "lugar": {"nombre": "...", "descripcion": "..."},
-  "hook": "...(one shocking first sentence)...",
-  "guion": "...(narration script in ENGLISH, MINIMUM 150 words, about 60-70 seconds when read aloud)...",
-  "escenas": ["scene 1", "scene 2", "scene 3"],
-  "titulo": "...(viral YouTube title in ENGLISH with emoji)...",
-  "tags": ["truecrime", "mystery", "unsolved", "shorts"]
+"personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
+"lugar": {"nombre": "...", "descripcion": "..."},
+"hook": "...(one shocking first sentence)...",
+"guion": "...(narration script in ENGLISH, MINIMUM 150 words, about 60-70 seconds when read aloud)...",
+"escenas": ["scene 1", "scene 2", "scene 3"],
+"titulo": "...(viral YouTube title in ENGLISH with emoji)...",
+"tags": ["truecrime", "mystery", "unsolved", "shorts"]
 }""",
         "consultas_broll": [
             "dark street night fog", "police lights night city",
@@ -144,15 +147,16 @@ Create a world record script with:
 5. A hook line (first sentence that stops the scroll)
 
 IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 200 words minimum. Write enough content to fill 75-90 seconds when read aloud. DO NOT write less than 200 words. Include specific details, examples, and dramatic moments to fill the time.
+
 Return ONLY valid JSON, no markdown, no backticks:
 {
-  "personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
-  "lugar": {"nombre": "...", "descripcion": "..."},
-  "hook": "...(one shocking first sentence)...",
-  "guion": "...(narration script in ENGLISH, MINIMUM 150 words, about 60-70 seconds when read aloud)...",
-  "escenas": ["scene 1", "scene 2", "scene 3"],
-  "titulo": "...(viral YouTube title in ENGLISH with emoji)...",
-  "tags": ["worldrecord", "guinness", "amazing", "shorts"]
+"personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
+"lugar": {"nombre": "...", "descripcion": "..."},
+"hook": "...(one shocking first sentence)...",
+"guion": "...(narration script in ENGLISH, MINIMUM 150 words, about 60-70 seconds when read aloud)...",
+"escenas": ["scene 1", "scene 2", "scene 3"],
+"titulo": "...(viral YouTube title in ENGLISH with emoji)...",
+"tags": ["worldrecord", "guinness", "amazing", "shorts"]
 }""",
         "consultas_broll": [
             "stadium crowd aerial", "extreme sports action",
@@ -175,15 +179,16 @@ Create a top 10 countdown script with:
 5. A hook line (first sentence that stops the scroll)
 
 IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 200 words minimum. Write enough content to fill 75-90 seconds when read aloud. DO NOT write less than 200 words. Include specific details, examples, and dramatic moments to fill the time.
+
 Return ONLY valid JSON, no markdown, no backticks:
 {
-  "personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
-  "lugar": {"nombre": "...", "descripcion": "..."},
-  "hook": "...(one shocking first sentence)...",
-  "guion": "...(narration script in ENGLISH, MINIMUM 150 words, about 60-70 seconds when read aloud)...",
-  "escenas": ["scene 1", "scene 2", "scene 3"],
-  "titulo": "...(viral YouTube title in ENGLISH with emoji)...",
-  "tags": ["top10", "facts", "ranking", "shorts"]
+"personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
+"lugar": {"nombre": "...", "descripcion": "..."},
+"hook": "...(one shocking first sentence)...",
+"guion": "...(narration script in ENGLISH, MINIMUM 150 words, about 60-70 seconds when read aloud)...",
+"escenas": ["scene 1", "scene 2", "scene 3"],
+"titulo": "...(viral YouTube title in ENGLISH with emoji)...",
+"tags": ["top10", "facts", "ranking", "shorts"]
 }""",
         "consultas_broll": [
             "nature landscape aerial", "city skyline timelapse",
@@ -206,15 +211,16 @@ Create a script about an incredible lesser-known historical fact with:
 5. A hook line (first sentence that stops the scroll)
 
 IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 200 words minimum. Write enough content to fill 75-90 seconds when read aloud. DO NOT write less than 200 words. Include specific details, examples, and dramatic moments to fill the time.
+
 Return ONLY valid JSON, no markdown, no backticks:
 {
-  "personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
-  "lugar": {"nombre": "...", "descripcion": "..."},
-  "hook": "...(one shocking first sentence)...",
-  "guion": "...(narration script in ENGLISH, MINIMUM 150 words, about 60-70 seconds when read aloud)...",
-  "escenas": ["scene 1", "scene 2", "scene 3"],
-  "titulo": "...(viral YouTube title in ENGLISH with emoji)...",
-  "tags": ["history", "historyfacts", "didyouknow", "shorts"]
+"personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
+"lugar": {"nombre": "...", "descripcion": "..."},
+"hook": "...(one shocking first sentence)...",
+"guion": "...(narration script in ENGLISH, MINIMUM 150 words, about 60-70 seconds when read aloud)...",
+"escenas": ["scene 1", "scene 2", "scene 3"],
+"titulo": "...(viral YouTube title in ENGLISH with emoji)...",
+"tags": ["history", "historyfacts", "didyouknow", "shorts"]
 }""",
         "consultas_broll": [
             "ancient ruins aerial", "medieval castle exterior",
@@ -237,15 +243,16 @@ Create a script about a mind-blowing interesting fact with:
 5. A hook line (first sentence that stops the scroll)
 
 IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 200 words minimum. Write enough content to fill 75-90 seconds when read aloud. DO NOT write less than 200 words. Include specific details, examples, and dramatic moments to fill the time.
+
 Return ONLY valid JSON, no markdown, no backticks:
 {
-  "personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
-  "lugar": {"nombre": "...", "descripcion": "..."},
-  "hook": "...(one shocking first sentence)...",
-  "guion": "...(narration script in ENGLISH, MINIMUM 150 words, about 60-70 seconds when read aloud)...",
-  "escenas": ["scene 1", "scene 2", "scene 3"],
-  "titulo": "...(viral YouTube title in ENGLISH with emoji)...",
-  "tags": ["facts", "science", "mindblowing", "shorts"]
+"personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
+"lugar": {"nombre": "...", "descripcion": "..."},
+"hook": "...(one shocking first sentence)...",
+"guion": "...(narration script in ENGLISH, MINIMUM 150 words, about 60-70 seconds when read aloud)...",
+"escenas": ["scene 1", "scene 2", "scene 3"],
+"titulo": "...(viral YouTube title in ENGLISH with emoji)...",
+"tags": ["facts", "science", "mindblowing", "shorts"]
 }""",
         "consultas_broll": [
             "space galaxy stars", "underwater ocean deep",
@@ -387,6 +394,7 @@ def generar_imagenes_personaje(contenido: dict) -> list:
         )
         if ruta:
             rutas.append(ruta)
+
     return rutas
 
 
@@ -395,23 +403,19 @@ def crear_intro_imagen(texto: str, nicho: str) -> str:
     img = Image.new("RGB", RESOLUCION, color=(0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # Gradiente oscuro de fondo
     for y in range(RESOLUCION[1]):
         alpha = int(30 + (y / RESOLUCION[1]) * 20)
         draw.line([(0, y), (RESOLUCION[0], y)], fill=(alpha, 0, 0))
 
-    # Linea roja en la parte superior
     draw.rectangle([(0, 0), (RESOLUCION[0], 8)], fill=(200, 0, 0))
 
-    # Texto centrado
     try:
         font_grande = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 72)
         font_pequeño = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 40)
-    except:
+    except Exception:
         font_grande = ImageFont.load_default()
         font_pequeño = ImageFont.load_default()
 
-    # Texto principal
     palabras = texto.split()
     lineas = []
     linea_actual = ""
@@ -467,7 +471,7 @@ def generar_audio(texto: str, salida: str = "audio.mp3"):
 
 
 def transcribir(audio_path: str):
-    modelo = whisper.load_model("tiny")
+    modelo = whisper.load_model("base")
     resultado = modelo.transcribe(audio_path, language="en")
     return resultado["segments"]
 
@@ -483,8 +487,10 @@ def _descargar_desde_consultas(consultas, headers, carpeta, indice_inicial, por_
         except Exception as e:
             print(f"Aviso busqueda '{consulta}': {e}")
             continue
+
         videos = r.json().get("videos", [])
         print(f"'{consulta}': {len(videos)} clips")
+
         for v in videos:
             archivos = sorted(v["video_files"], key=lambda f: f.get("width", 0))
             if not archivos:
@@ -507,17 +513,20 @@ def descargar_clips(nicho: str, carpeta: str = "clips"):
     os.makedirs(carpeta, exist_ok=True)
     headers = {"Authorization": PEXELS_API_KEY}
     consultas = NICHOS[nicho]["consultas_broll"]
+
     rutas, siguiente = _descargar_desde_consultas(consultas, headers, carpeta, 0)
+
     if len(rutas) < 20:
         print(f"Solo {len(rutas)} clips, añadiendo respaldo...")
         extra, _ = _descargar_desde_consultas(CONSULTAS_RESPALDO, headers, carpeta, siguiente)
         rutas.extend(extra)
+
     print(f"Total clips: {len(rutas)}")
     return rutas
 
 
 def armar_video(clips_pexels, imagenes_ia, audio_path, segmentos,
-                nicho, intro_img, musica_path, salida="video_final.mp4"):
+                 nicho, intro_img, musica_path, salida="video_final.mp4"):
     audio_voz = AudioFileClip(audio_path)
     duracion_total = audio_voz.duration
     color_sub = NICHOS[nicho]["color_subtitulo"]
@@ -603,7 +612,6 @@ def armar_video(clips_pexels, imagenes_ia, audio_path, segmentos,
         try:
             musica = AudioFileClip(musica_path)
             duracion_video = video_base.duration
-            # Loopar musica si es mas corta que el video
             if musica.duration < duracion_video:
                 import math
                 loops = math.ceil(duracion_video / musica.duration)
@@ -630,7 +638,6 @@ def armar_video(clips_pexels, imagenes_ia, audio_path, segmentos,
             t_inicio = seg["start"] + 2.5 + (j * dur_palabra)
             t_fin = t_inicio + dur_palabra
 
-            # Sombra
             sombra = TextClip(
                 palabra.upper(), fontsize=90, color="black",
                 font="DejaVu-Sans-Bold", stroke_color="black", stroke_width=4,
@@ -638,17 +645,16 @@ def armar_video(clips_pexels, imagenes_ia, audio_path, segmentos,
                 (RESOLUCION[0]//2 - 3, int(RESOLUCION[1] * 0.72) + 3), True
             )
 
-            # Texto principal con color del nicho
             txt = TextClip(
                 palabra.upper(), fontsize=90, color="white",
                 font="DejaVu-Sans-Bold", stroke_color=color_sub, stroke_width=3,
             ).set_start(t_inicio).set_end(t_fin).set_position(
                 ("center", 0.72), relative=True
             )
+
             subtitulos.append(sombra)
             subtitulos.append(txt)
 
-    # Texto de intro superpuesto
     intro_txt = TextClip(
         NICHOS[nicho]["intro_texto"].upper(),
         fontsize=55, color="white", font="DejaVu-Sans-Bold",
@@ -659,8 +665,9 @@ def armar_video(clips_pexels, imagenes_ia, audio_path, segmentos,
 
     final = CompositeVideoClip([video_base, *subtitulos])
     final = final.set_duration(duracion_total + 2.5)
+
     final.write_videofile(salida, fps=30, codec="libx264", audio_codec="aac",
-                          threads=2, preset="ultrafast")
+                           threads=2, preset="ultrafast")
     return salida
 
 
@@ -673,6 +680,7 @@ def subir_youtube(video_path: str, titulo: str, descripcion: str, tags: list):
         token_uri="https://oauth2.googleapis.com/token",
     )
     youtube = build("youtube", "v3", credentials=creds)
+
     body = {
         "snippet": {
             "title": titulo[:100],
@@ -682,6 +690,7 @@ def subir_youtube(video_path: str, titulo: str, descripcion: str, tags: list):
         },
         "status": {"privacyStatus": "public"},
     }
+
     media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
     request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
     response = request.execute()
@@ -689,7 +698,9 @@ def subir_youtube(video_path: str, titulo: str, descripcion: str, tags: list):
 
 
 def main():
-    nicho = random.choice(list(NICHOS.keys()))
+    # Nicho fijado a "horror" para mantener consistencia del canal.
+    # Antes era: nicho = random.choice(list(NICHOS.keys()))
+    nicho = "horror"
     print(f"Nicho: {nicho}")
 
     contenido = generar_contenido(nicho)
@@ -699,7 +710,6 @@ def main():
     imagenes_ia = generar_imagenes_personaje(contenido)
     intro_img = crear_intro_imagen(contenido.get("hook", NICHOS[nicho]["intro_texto"]), nicho)
     musica_path = descargar_musica(nicho)
-
     audio_path = generar_audio(contenido["guion"])
     segmentos = transcribir(audio_path)
     clips = descargar_clips(nicho)
@@ -712,6 +722,7 @@ def main():
     titulo = contenido.get("titulo", "You Won't Believe This 😱")
     descripcion = f"{contenido['guion']}\n\n#{nicho.replace('_', '')} #shorts"
     tags = contenido.get("tags", [nicho, "shorts", "viral"])
+
     subir_youtube(video_path, titulo, descripcion, tags)
 
 
