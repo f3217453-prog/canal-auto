@@ -1,17 +1,19 @@
 """
-Pipeline mejorado para Shorts - Version 3.0
-Mejoras:
-- Musica de fondo automatica (Pixabay, libre de derechos)
-- Intro dramatico con texto animado
-- Subtitulos estilo viral (palabras individuales resaltadas)
-- Voz mas dramatica (AndrewNeural)
-- Efectos de sonido de suspenso
-- Imagenes IA con personajes
-- 6 nichos: Horror, True Crime, World Records, Top 10, History, Science Facts
-- Sin pantalla negra, muchos clips variados
+Pipeline mejorado para Shorts - Version 4.0
 
-NOTA: nicho fijado a "horror" (antes era random.choice) para mantener
-consistencia tematica del canal.
+Cambios respecto a v3.0:
+- Nicho fijado a "horror" (consistencia de canal)
+- Guion mas corto (90-130 palabras / ~35-50s) para acercarse a la ventana
+  de mejor retencion en Shorts (dato 2026: 68% de las vistas de Shorts
+  vienen de videos <25s; el umbral de empuje algoritmico es ~65% de
+  retencion en shorts <30s)
+- Sin pantalla de intro estatica: el hook se superpone como texto sobre
+  el primer clip de video real, audio empieza en el segundo 0
+- Clips de b-roll emparejados por escena narrativa (no solo aleatorios)
+- Prompts de imagen IA con mayor consistencia de personaje + negative prompt
+- Mas variedad de clips descargados, menos repeticion dentro del mismo video
+- Render con mejor calidad (preset + bitrate)
+- Whisper "base" en vez de "tiny" para subtitulos mas precisos
 """
 import os
 import io
@@ -45,54 +47,49 @@ RESOLUCION = (1080, 1920)
 HF_MODEL = "stabilityai/stable-diffusion-xl-base-1.0"
 MODELOS_GEMINI = ["gemini-3.5-flash", "gemini-3.1-flash-lite"]
 
+NEGATIVE_PROMPT = (
+    "deformed hands, extra fingers, mutated, blurry, watermark, text, "
+    "logo, disfigured face, low quality, low resolution, duplicate"
+)
+
 MUSICA_AMBIENTE = {
     "horror": [
         "https://cdn.pixabay.com/download/audio/2022/03/10/audio_270f4b1fbe.mp3",
         "https://cdn.pixabay.com/download/audio/2021/09/06/audio_dad6b6ef7f.mp3",
     ],
-    "true_crime": [
-        "https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3",
-        "https://cdn.pixabay.com/download/audio/2021/08/09/audio_99bbbd8a4c.mp3",
-    ],
-    "world_records": [
-        "https://cdn.pixabay.com/download/audio/2022/01/27/audio_d0c6ff1d24.mp3",
-        "https://cdn.pixabay.com/download/audio/2021/11/25/audio_5bbc9a1a1c.mp3",
-    ],
-    "top10": [
-        "https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73467.mp3",
-        "https://cdn.pixabay.com/download/audio/2022/01/27/audio_d0c6ff1d24.mp3",
-    ],
-    "history_facts": [
-        "https://cdn.pixabay.com/download/audio/2021/11/01/audio_cb91762d6e.mp3",
-        "https://cdn.pixabay.com/download/audio/2022/02/07/audio_4a56f2830c.mp3",
-    ],
-    "interesting_facts": [
-        "https://cdn.pixabay.com/download/audio/2022/03/10/audio_270f4b1fbe.mp3",
-        "https://cdn.pixabay.com/download/audio/2021/08/09/audio_99bbbd8a4c.mp3",
-    ],
 }
 
 NICHOS = {
     "horror": {
-        "prompt_sistema": """You are a professional horror screenwriter.
-Create a short horror story script with:
-1. A main character (name, age, physical description, personality)
-2. A specific terrifying location (describe in detail)
-3. Narrative arc: eerie opening, building dread, shocking climax, chilling ending
-4. 3 vivid scene descriptions for AI image generation
-5. A hook line (first sentence that stops the scroll)
+        "prompt_sistema": """You are a viral horror YouTube Shorts writer with 10 million subscribers.
+You know exactly what makes people stop scrolling and watch to the end.
 
-IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 200 words minimum. Write enough content to fill 75-90 seconds when read aloud. DO NOT write less than 200 words. Include specific details, examples, and dramatic moments to fill the time.
+Create a horror story script with:
+1. A main character (name, age, physical description, personality, clothing — specific enough to keep visually consistent across AI images)
+2. A specific terrifying location (concrete details)
+3. Narrative arc: devastating hook → building dread → shocking twist → chilling ending that lingers
+4. 3 vivid scene descriptions for AI image generation (5-8 words each, filmable and concrete)
+5. A hook line: THE most important element. Must be under 10 words. Must create an immediate question or dread in the viewer's mind. Examples of great hooks: "She heard her own voice on the answering machine." / "The babysitter found a third child in the house." / "His obituary was published before he died."
+
+TITLE RULES (critical for clicks):
+- Include a number or specific detail ("The 3AM Phone Call", "Found in Room 13")
+- Include 1 power word: haunted / cursed / forbidden / disappeared / survived / never found
+- End with 😱 or 👁️ or ☠️
+- Add #Shorts #Horror at the very end of the title string (these appear above the video)
+- Example: "She Survived Room 13... But Something Followed Her Home 😱 #Shorts #Horror"
+
+GUION RULES: 90-130 words STRICT in ENGLISH. Every sentence must earn its place.
+Start with the hook. Build tension. End on a cliffhanger or revelation that makes people comment.
 
 Return ONLY valid JSON, no markdown, no backticks:
 {
 "personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
 "lugar": {"nombre": "...", "descripcion": "..."},
-"hook": "...(one shocking first sentence)...",
-"guion": "...(narration script in ENGLISH, MINIMUM 150 words, about 60-70 seconds when read aloud)...",
-"escenas": ["scene 1", "scene 2", "scene 3"],
-"titulo": "...(viral YouTube title in ENGLISH with emoji)...",
-"tags": ["horror", "scary", "creepypasta", "shorts"]
+"hook": "...(under 10 words, creates immediate dread or question)...",
+"guion": "...(90-130 words STRICT, starts with hook, ends on cliffhanger)...",
+"escenas": ["filmable visual phrase 1", "filmable visual phrase 2", "filmable visual phrase 3"],
+"titulo": "...(clickbait title with power word + emoji + #Shorts #Horror at end)...",
+"tags": ["horror", "scary", "creepypasta", "horrorstory", "scarystories", "shorts", "viral", "paranormal", "truescaryhorror", "horrorshorts"]
 }""",
         "consultas_broll": [
             "dark forest fog night", "abandoned house interior",
@@ -101,169 +98,11 @@ Return ONLY valid JSON, no markdown, no backticks:
             "misty woods path night", "dark attic old house",
             "shadow silhouette dark hallway", "thunderstorm dark night",
             "creepy old mansion exterior", "dark basement horror",
+            "empty hallway flickering light", "footsteps dark corridor",
+            "broken mirror dark room", "rain window night horror",
         ],
         "intro_texto": "WARNING: This story is not for the faint of heart...",
         "color_subtitulo": "#FF4444",
-    },
-    "true_crime": {
-        "prompt_sistema": """You are a professional true crime documentary writer.
-Create a gripping true crime story with:
-1. A fictional composite investigator (name, description, role)
-2. A fictional location where events took place
-3. Narrative: cold open hook, investigation, twist, unresolved ending
-4. 3 vivid atmospheric scene descriptions for AI image generation
-5. A hook line (first sentence that stops the scroll)
-
-IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 200 words minimum. Write enough content to fill 75-90 seconds when read aloud. DO NOT write less than 200 words. Include specific details, examples, and dramatic moments to fill the time.
-
-Return ONLY valid JSON, no markdown, no backticks:
-{
-"personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
-"lugar": {"nombre": "...", "descripcion": "..."},
-"hook": "...(one shocking first sentence)...",
-"guion": "...(narration script in ENGLISH, MINIMUM 150 words, about 60-70 seconds when read aloud)...",
-"escenas": ["scene 1", "scene 2", "scene 3"],
-"titulo": "...(viral YouTube title in ENGLISH with emoji)...",
-"tags": ["truecrime", "mystery", "unsolved", "shorts"]
-}""",
-        "consultas_broll": [
-            "dark street night fog", "police lights night city",
-            "old detective office", "rain window night moody",
-            "empty road night headlights", "newspaper archive old",
-            "typewriter old paper", "courthouse exterior night",
-            "crime scene tape", "detective investigating",
-            "surveillance camera footage", "prison corridor",
-        ],
-        "intro_texto": "This case was never solved...",
-        "color_subtitulo": "#FFD700",
-    },
-    "world_records": {
-        "prompt_sistema": """You are an exciting documentary narrator for world records.
-Create a world record script with:
-1. A fictional record holder (name, description, what they achieved)
-2. Location where the record was set
-3. Exciting narrative with vivid numbers and mind-blowing comparisons
-4. 3 dramatic scene descriptions for AI image generation
-5. A hook line (first sentence that stops the scroll)
-
-IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 200 words minimum. Write enough content to fill 75-90 seconds when read aloud. DO NOT write less than 200 words. Include specific details, examples, and dramatic moments to fill the time.
-
-Return ONLY valid JSON, no markdown, no backticks:
-{
-"personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
-"lugar": {"nombre": "...", "descripcion": "..."},
-"hook": "...(one shocking first sentence)...",
-"guion": "...(narration script in ENGLISH, MINIMUM 150 words, about 60-70 seconds when read aloud)...",
-"escenas": ["scene 1", "scene 2", "scene 3"],
-"titulo": "...(viral YouTube title in ENGLISH with emoji)...",
-"tags": ["worldrecord", "guinness", "amazing", "shorts"]
-}""",
-        "consultas_broll": [
-            "stadium crowd aerial", "extreme sports action",
-            "mountain climbing extreme", "ocean waves aerial",
-            "athlete slow motion", "fireworks night sky",
-            "skydiving aerial", "olympic stadium crowd",
-            "speed racing car", "crowd cheering stadium",
-            "world record attempt", "extreme challenge sport",
-        ],
-        "intro_texto": "You won't believe this world record...",
-        "color_subtitulo": "#00FF88",
-    },
-    "top10": {
-        "prompt_sistema": """You are a captivating top 10 countdown narrator.
-Create a top 10 countdown script with:
-1. A dramatic host character (name, charismatic description)
-2. A dramatic countdown setting
-3. Fast punchy narration building to the most shocking entry at number 1
-4. 3 vivid scene descriptions for AI image generation
-5. A hook line (first sentence that stops the scroll)
-
-IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 200 words minimum. Write enough content to fill 75-90 seconds when read aloud. DO NOT write less than 200 words. Include specific details, examples, and dramatic moments to fill the time.
-
-Return ONLY valid JSON, no markdown, no backticks:
-{
-"personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
-"lugar": {"nombre": "...", "descripcion": "..."},
-"hook": "...(one shocking first sentence)...",
-"guion": "...(narration script in ENGLISH, MINIMUM 150 words, about 60-70 seconds when read aloud)...",
-"escenas": ["scene 1", "scene 2", "scene 3"],
-"titulo": "...(viral YouTube title in ENGLISH with emoji)...",
-"tags": ["top10", "facts", "ranking", "shorts"]
-}""",
-        "consultas_broll": [
-            "nature landscape aerial", "city skyline timelapse",
-            "ocean underwater", "desert landscape aerial",
-            "mountain range aerial", "wildlife animals",
-            "space stars night sky", "waterfall nature",
-            "jungle aerial drone", "glacier ice aerial",
-            "volcano eruption", "canyon aerial view",
-        ],
-        "intro_texto": "Number 1 will blow your mind...",
-        "color_subtitulo": "#FF8C00",
-    },
-    "history_facts": {
-        "prompt_sistema": """You are a fascinating history documentary narrator.
-Create a script about an incredible lesser-known historical fact with:
-1. A key historical figure (name, description, era)
-2. The historical location or setting
-3. Narrative: hook with shocking fact, context, surprising details, modern relevance
-4. 3 vivid scene descriptions for AI image generation
-5. A hook line (first sentence that stops the scroll)
-
-IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 200 words minimum. Write enough content to fill 75-90 seconds when read aloud. DO NOT write less than 200 words. Include specific details, examples, and dramatic moments to fill the time.
-
-Return ONLY valid JSON, no markdown, no backticks:
-{
-"personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
-"lugar": {"nombre": "...", "descripcion": "..."},
-"hook": "...(one shocking first sentence)...",
-"guion": "...(narration script in ENGLISH, MINIMUM 150 words, about 60-70 seconds when read aloud)...",
-"escenas": ["scene 1", "scene 2", "scene 3"],
-"titulo": "...(viral YouTube title in ENGLISH with emoji)...",
-"tags": ["history", "historyfacts", "didyouknow", "shorts"]
-}""",
-        "consultas_broll": [
-            "ancient ruins aerial", "medieval castle exterior",
-            "old manuscript library", "ancient egypt pyramids",
-            "roman colosseum", "viking ship ocean",
-            "renaissance painting museum", "ancient greece temple",
-            "world war historical", "old map vintage",
-            "historical artifact museum", "ancient civilization ruins",
-        ],
-        "intro_texto": "History never told you this...",
-        "color_subtitulo": "#DDA0DD",
-    },
-    "interesting_facts": {
-        "prompt_sistema": """You are an energetic science and curiosity narrator.
-Create a script about a mind-blowing interesting fact with:
-1. A fictional scientist or expert (name, field, description)
-2. A dramatic setting where this fact is revealed
-3. Narrative: shocking hook, explanation, mind-blowing details, perspective-changing ending
-4. 3 vivid scene descriptions for AI image generation
-5. A hook line (first sentence that stops the scroll)
-
-IMPORTANT: Write EVERYTHING in ENGLISH ONLY. The guion MUST be at least 200 words minimum. Write enough content to fill 75-90 seconds when read aloud. DO NOT write less than 200 words. Include specific details, examples, and dramatic moments to fill the time.
-
-Return ONLY valid JSON, no markdown, no backticks:
-{
-"personaje": {"nombre": "...", "descripcion": "...", "personalidad": "..."},
-"lugar": {"nombre": "...", "descripcion": "..."},
-"hook": "...(one shocking first sentence)...",
-"guion": "...(narration script in ENGLISH, MINIMUM 150 words, about 60-70 seconds when read aloud)...",
-"escenas": ["scene 1", "scene 2", "scene 3"],
-"titulo": "...(viral YouTube title in ENGLISH with emoji)...",
-"tags": ["facts", "science", "mindblowing", "shorts"]
-}""",
-        "consultas_broll": [
-            "space galaxy stars", "underwater ocean deep",
-            "microscope cells biology", "lightning storm",
-            "volcano lava flow", "aurora borealis night",
-            "brain neuron science", "dna strand science",
-            "solar system planets", "deep ocean creatures",
-            "science lab experiment", "nature phenomenon aerial",
-        ],
-        "intro_texto": "Science just broke your brain...",
-        "color_subtitulo": "#00BFFF",
     },
 }
 
@@ -277,14 +116,14 @@ CONSULTAS_RESPALDO = [
 
 def extender_guion_corto(guion: str, nicho: str) -> str:
     """Si el guion es muy corto, lo extiende con una segunda llamada"""
-    prompt = f"""This narration script is too short. Extend it to at least 150 words IN ENGLISH ONLY.
-Keep the same style and topic. Add more details, examples, and dramatic elements.
+    prompt = f"""This narration script is too short. Extend it to 90-130 words IN ENGLISH ONLY.
+Keep the same style and topic. Add specific details, do not pad with filler.
 Return ONLY the extended narration text, nothing else:
 
 {guion}"""
     body = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.9, "maxOutputTokens": 800}
+        "generationConfig": {"temperature": 0.9, "maxOutputTokens": 500}
     }
     for modelo in MODELOS_GEMINI:
         try:
@@ -305,7 +144,7 @@ def generar_contenido(nicho: str) -> dict:
     prompt_sistema = NICHOS[nicho]["prompt_sistema"]
     body = {
         "contents": [{"parts": [{"text": prompt_sistema}]}],
-        "generationConfig": {"temperature": 0.9, "maxOutputTokens": 3000}
+        "generationConfig": {"temperature": 0.9, "maxOutputTokens": 2000}
     }
     for modelo in MODELOS_GEMINI:
         for intento in range(3):
@@ -327,20 +166,20 @@ def generar_contenido(nicho: str) -> dict:
                     contenido = json.loads(texto)
                     palabras = len(contenido.get("guion", "").split())
                     print(f"Guion generado: {palabras} palabras")
-                    if palabras < 120:
+                    if palabras < 90:
                         print(f"Guion muy corto ({palabras} palabras), extendiendo...")
                         contenido["guion"] = extender_guion_corto(contenido["guion"], nicho)
                         print(f"Extendido: {len(contenido['guion'].split())} palabras")
                     return contenido
                 except json.JSONDecodeError:
                     return {
-                        "personaje": {"nombre": "Unknown", "descripcion": "mysterious figure", "personalidad": "enigmatic"},
+                        "personaje": {"nombre": "Unknown", "descripcion": "mysterious figure in a dark coat", "personalidad": "enigmatic"},
                         "lugar": {"nombre": "Unknown", "descripcion": "dramatic setting"},
-                        "hook": "What happened next shocked everyone.",
-                        "guion": "Something terrifying happened here that most people never knew about. The kind of story that keeps you awake at night wondering if it could happen to you. Scientists and experts have tried to explain it for decades, but no one has ever found a satisfying answer. What we know for certain is that nothing was ever the same after that night.",
-                        "escenas": ["dark mysterious scene", "tense atmospheric moment", "chilling final scene"],
+                        "hook": "This is the story nobody survived to tell.",
+                        "guion": "Something terrifying happened here that most people never knew about. The kind of story that keeps you awake at night wondering if it could happen to you. Investigators tried to explain it for years, but no one ever found a satisfying answer. What we know for certain is that nothing was ever the same after that night, and the house has stood empty ever since.",
+                        "escenas": ["dark mysterious hallway", "tense atmospheric room", "chilling final door"],
                         "titulo": "You Won't Believe This 😱",
-                        "tags": [nicho, "shorts", "viral", "facts"]
+                        "tags": [nicho, "shorts", "viral", "horror"]
                     }
             except Exception as e:
                 print(f"Error en {modelo} intento {intento+1}: {e}")
@@ -353,8 +192,12 @@ def generar_imagen_ia(prompt: str, indice: int, carpeta: str = "imagenes_ia") ->
     destino = f"{carpeta}/imagen_{indice}.png"
     headers = {"Authorization": f"Bearer {HF_TOKEN}"}
     payload = {
-        "inputs": f"cinematic, dramatic lighting, high quality, 4k: {prompt}",
-        "parameters": {"width": 768, "height": 1344}
+        "inputs": f"cinematic film still, 35mm, shallow depth of field, dramatic lighting, high quality, 4k: {prompt}",
+        "parameters": {
+            "width": 768,
+            "height": 1344,
+            "negative_prompt": NEGATIVE_PROMPT,
+        }
     }
     try:
         r = requests.post(
@@ -373,14 +216,21 @@ def generar_imagen_ia(prompt: str, indice: int, carpeta: str = "imagenes_ia") ->
 
 
 def generar_imagenes_personaje(contenido: dict) -> list:
+    """Genera imagenes reutilizando la MISMA descripcion del personaje
+    en cada prompt para mantener consistencia visual entre escenas."""
     rutas = []
     personaje = contenido.get("personaje", {})
     lugar = contenido.get("lugar", {})
     escenas = contenido.get("escenas", [])
 
+    descripcion_personaje = (
+        f"{personaje.get('nombre', 'mysterious person')}, "
+        f"{personaje.get('descripcion', 'dramatic figure, dark clothing')} "
+        "-- consistent character design, same face, same hairstyle, same outfit in every shot"
+    )
+
     prompt_personaje = (
-        f"Cinematic portrait of {personaje.get('nombre', 'mysterious person')}, "
-        f"{personaje.get('descripcion', 'dramatic figure')}, "
+        f"Cinematic portrait of {descripcion_personaje}, "
         f"in {lugar.get('nombre', 'dramatic setting')}, "
         "dramatic cinematic lighting, film quality"
     )
@@ -390,56 +240,13 @@ def generar_imagenes_personaje(contenido: dict) -> list:
 
     for i, escena in enumerate(escenas[:3]):
         ruta = generar_imagen_ia(
-            f"{escena}, {lugar.get('descripcion', 'dramatic')}, cinematic quality", i + 1
+            f"{escena}, featuring {descripcion_personaje}, "
+            f"{lugar.get('descripcion', 'dramatic')}, cinematic quality", i + 1
         )
         if ruta:
             rutas.append(ruta)
 
     return rutas
-
-
-def crear_intro_imagen(texto: str, nicho: str) -> str:
-    """Crea una imagen de intro dramatica con texto grande"""
-    img = Image.new("RGB", RESOLUCION, color=(0, 0, 0))
-    draw = ImageDraw.Draw(img)
-
-    for y in range(RESOLUCION[1]):
-        alpha = int(30 + (y / RESOLUCION[1]) * 20)
-        draw.line([(0, y), (RESOLUCION[0], y)], fill=(alpha, 0, 0))
-
-    draw.rectangle([(0, 0), (RESOLUCION[0], 8)], fill=(200, 0, 0))
-
-    try:
-        font_grande = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 72)
-        font_pequeño = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 40)
-    except Exception:
-        font_grande = ImageFont.load_default()
-        font_pequeño = ImageFont.load_default()
-
-    palabras = texto.split()
-    lineas = []
-    linea_actual = ""
-    for palabra in palabras:
-        if len(linea_actual + " " + palabra) < 20:
-            linea_actual += " " + palabra if linea_actual else palabra
-        else:
-            lineas.append(linea_actual)
-            linea_actual = palabra
-    if linea_actual:
-        lineas.append(linea_actual)
-
-    y_start = RESOLUCION[1] // 2 - (len(lineas) * 80) // 2
-    for linea in lineas:
-        bbox = draw.textbbox((0, 0), linea, font=font_grande)
-        w = bbox[2] - bbox[0]
-        x = (RESOLUCION[0] - w) // 2
-        draw.text((x + 3, y_start + 3), linea, font=font_grande, fill=(0, 0, 0))
-        draw.text((x, y_start), linea, font=font_grande, fill=(255, 255, 255))
-        y_start += 90
-
-    destino = "intro_imagen.png"
-    img.save(destino)
-    return destino
 
 
 def descargar_musica(nicho: str) -> str:
@@ -476,156 +283,254 @@ def transcribir(audio_path: str):
     return resultado["segments"]
 
 
-def _descargar_desde_consultas(consultas, headers, carpeta, indice_inicial, por_consulta=6):
+def _buscar_clips(consulta: str, headers: dict, carpeta: str,
+                   indice_inicial: int, por_consulta: int = 10):
     rutas = []
     indice_global = indice_inicial
-    for consulta in consultas:
-        url = f"https://api.pexels.com/videos/search?query={consulta}&per_page={por_consulta}"
-        try:
-            r = requests.get(url, headers=headers, timeout=30)
-            r.raise_for_status()
-        except Exception as e:
-            print(f"Aviso busqueda '{consulta}': {e}")
+    url = f"https://api.pexels.com/videos/search?query={consulta}&per_page={por_consulta}"
+    try:
+        r = requests.get(url, headers=headers, timeout=30)
+        r.raise_for_status()
+    except Exception as e:
+        print(f"Aviso busqueda '{consulta}': {e}")
+        return rutas, indice_global
+
+    videos = r.json().get("videos", [])
+    print(f"'{consulta}': {len(videos)} clips")
+
+    for v in videos:
+        archivos = sorted(v["video_files"], key=lambda f: f.get("width", 0))
+        if not archivos:
             continue
+        enlace = archivos[len(archivos)//2]["link"]
+        destino = f"{carpeta}/clip_{indice_global}.mp4"
+        try:
+            with requests.get(enlace, stream=True, timeout=60) as resp:
+                with open(destino, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=8192):
+                        f.write(chunk)
+            rutas.append(destino)
+            indice_global += 1
+        except Exception as e:
+            print(f"Aviso descarga: {e}")
 
-        videos = r.json().get("videos", [])
-        print(f"'{consulta}': {len(videos)} clips")
-
-        for v in videos:
-            archivos = sorted(v["video_files"], key=lambda f: f.get("width", 0))
-            if not archivos:
-                continue
-            enlace = archivos[len(archivos)//2]["link"]
-            destino = f"{carpeta}/clip_{indice_global}.mp4"
-            try:
-                with requests.get(enlace, stream=True, timeout=60) as resp:
-                    with open(destino, "wb") as f:
-                        for chunk in resp.iter_content(chunk_size=8192):
-                            f.write(chunk)
-                rutas.append(destino)
-                indice_global += 1
-            except Exception as e:
-                print(f"Aviso descarga: {e}")
     return rutas, indice_global
 
 
-def descargar_clips(nicho: str, carpeta: str = "clips"):
+def descargar_clips_por_escena(escenas: list, nicho: str, carpeta: str = "clips"):
+    """Descarga clips agrupados por escena narrativa. Devuelve una lista
+    de listas (una por escena) mas un pool generico de respaldo.
+    Se descargan muchos clips para garantizar que nunca haya huecos."""
     os.makedirs(carpeta, exist_ok=True)
     headers = {"Authorization": PEXELS_API_KEY}
-    consultas = NICHOS[nicho]["consultas_broll"]
 
-    rutas, siguiente = _descargar_desde_consultas(consultas, headers, carpeta, 0)
+    indice = 0
+    clips_por_escena = []
+    for escena in escenas:
+        # 12 clips por escena (antes 8) para tener margen amplio
+        rutas, indice = _buscar_clips(escena, headers, carpeta, indice, por_consulta=12)
+        clips_por_escena.append(rutas)
 
-    if len(rutas) < 20:
-        print(f"Solo {len(rutas)} clips, añadiendo respaldo...")
-        extra, _ = _descargar_desde_consultas(CONSULTAS_RESPALDO, headers, carpeta, siguiente)
-        rutas.extend(extra)
+    # Pool generico: todas las consultas del nicho a 12 clips cada una
+    consultas_nicho = NICHOS[nicho]["consultas_broll"]
+    pool_generico = []
+    for consulta in consultas_nicho:
+        rutas, indice = _buscar_clips(consulta, headers, carpeta, indice, por_consulta=12)
+        pool_generico.extend(rutas)
 
-    print(f"Total clips: {len(rutas)}")
-    return rutas
+    # Si el pool sigue siendo pequeño, añade TODAS las consultas de respaldo
+    total = sum(len(c) for c in clips_por_escena) + len(pool_generico)
+    if total < 40:
+        print(f"Solo {total} clips, descargando TODOS los respaldos...")
+        for consulta in CONSULTAS_RESPALDO:
+            extra, indice = _buscar_clips(consulta, headers, carpeta, indice, por_consulta=12)
+            pool_generico.extend(extra)
+
+    total_final = sum(len(c) for c in clips_por_escena) + len(pool_generico)
+    print(f"Total clips: {total_final}, por escena: {[len(c) for c in clips_por_escena]}")
+    return clips_por_escena, pool_generico
 
 
-def armar_video(clips_pexels, imagenes_ia, audio_path, segmentos,
-                 nicho, intro_img, musica_path, salida="video_final.mp4"):
+def _preparar_clip(ruta: str, dur_max: float):
+    """Abre, escala y recorta un clip al formato vertical del canal."""
+    try:
+        c = VideoFileClip(ruta).without_audio()
+    except Exception:
+        return None
+    if c.duration < 0.5:
+        c.close()
+        return None
+    escala = max(RESOLUCION[0] / c.w, RESOLUCION[1] / c.h)
+    c = c.resize(escala)
+    c = c.crop(x_center=c.w/2, y_center=c.h/2,
+               width=RESOLUCION[0], height=RESOLUCION[1])
+    dur_clip = min(c.duration, dur_max, random.uniform(2.0, 4.0))
+    if dur_clip <= 0:
+        c.close()
+        return None
+    return c.subclip(0, dur_clip)
+
+
+def _clip_emergencia(duracion: float) -> ImageClip:
+    """Genera un ImageClip negro solido como ULTIMO recurso absoluto.
+    Solo se usa si no hay ningun clip de video disponible en el pool.
+    Evita que MoviePy deje huecos de transparencia que renderizan negro."""
+    from PIL import Image as PILImage
+    import numpy as np
+    arr = np.zeros((RESOLUCION[1], RESOLUCION[0], 3), dtype=np.uint8)
+    return ImageClip(arr).set_duration(duracion)
+
+
+def _rellenar_con_pool(clips_finales, tiempo_acumulado, limite,
+                        pool, usados, max_intentos=None):
+    """Rellena tiempo hasta 'limite' usando clips del pool.
+    Nunca deja huecos: si el pool se agota, lo reutiliza desde el principio.
+    Devuelve tiempo_acumulado actualizado."""
+    if not pool:
+        return tiempo_acumulado
+    if max_intentos is None:
+        max_intentos = len(pool) * 3
+
+    intentos = 0
+    pool_idx = 0
+    pool_shuffled = list(pool)
+    random.shuffle(pool_shuffled)
+
+    while tiempo_acumulado < limite and intentos < max_intentos:
+        # Rota por el pool en orden para minimizar repeticion
+        ruta = pool_shuffled[pool_idx % len(pool_shuffled)]
+        pool_idx += 1
+        intentos += 1
+
+        restante = limite - tiempo_acumulado
+        c = _preparar_clip(ruta, restante)
+        if c is None:
+            continue
+        clips_finales.append(c)
+        tiempo_acumulado += c.duration
+
+    return tiempo_acumulado
+
+
+def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
+                 segmentos, nicho, hook_texto, musica_path,
+                 salida="video_final.mp4"):
     audio_voz = AudioFileClip(audio_path)
     duracion_total = audio_voz.duration
     color_sub = NICHOS[nicho]["color_subtitulo"]
 
+    n_escenas = max(len(clips_por_escena), 1)
+    dur_por_escena = duracion_total / n_escenas
+
     clips_finales = []
-    tiempo_acumulado = 0
+    tiempo_acumulado = 0.0
 
-    # 1. INTRO dramatico (2.5s)
-    if intro_img:
-        try:
-            intro = ImageClip(intro_img).set_duration(2.5)
-            clips_finales.append(intro)
-            tiempo_acumulado += 2.5
-        except Exception as e:
-            print(f"Aviso intro: {e}")
+    for i in range(n_escenas):
+        limite_tramo = (i + 1) * dur_por_escena
+        clips_escena = list(clips_por_escena[i]) if i < len(clips_por_escena) else []
+        random.shuffle(clips_escena)
 
-    # 2. Imagenes IA (3s cada una)
-    for ruta_img in imagenes_ia:
-        if tiempo_acumulado >= duracion_total + 2.5:
-            break
-        try:
-            dur = min(3.0, (duracion_total + 2.5) - tiempo_acumulado)
-            c = ImageClip(ruta_img).set_duration(dur)
+        # Imagen IA al inicio de cada tramo (personaje en tramo 0,
+        # escena i+1 en los siguientes)
+        idx_img = 0 if i == 0 else i + 1
+        if idx_img < len(imagenes_ia) and imagenes_ia:
+            try:
+                dur = min(2.5, limite_tramo - tiempo_acumulado)
+                if dur > 0.1:
+                    c = ImageClip(imagenes_ia[idx_img]).set_duration(dur)
+                    clips_finales.append(c)
+                    tiempo_acumulado += dur
+            except Exception as e:
+                print(f"Aviso imagen {idx_img}: {e}")
+
+        # Clips especificos de la escena (prioridad)
+        puntero = 0
+        while tiempo_acumulado < limite_tramo and puntero < len(clips_escena):
+            restante = limite_tramo - tiempo_acumulado
+            c = _preparar_clip(clips_escena[puntero], restante)
+            puntero += 1
+            if c is None:
+                continue
             clips_finales.append(c)
-            tiempo_acumulado += dur
-        except Exception as e:
-            print(f"Aviso imagen: {e}")
+            tiempo_acumulado += c.duration
 
-    # 3. Clips de Pexels hasta cubrir el audio
-    pool = clips_pexels.copy()
-    random.shuffle(pool)
-    puntero = 0
-    ultimo = None
+        # Relleno con pool generico si el tramo no esta cubierto
+        tiempo_acumulado = _rellenar_con_pool(
+            clips_finales, tiempo_acumulado, limite_tramo, pool_generico, set()
+        )
 
-    while tiempo_acumulado < duracion_total + 2.5:
-        if puntero >= len(pool):
-            random.shuffle(pool)
-            if pool and pool[0] == ultimo and len(pool) > 1:
-                pool[0], pool[1] = pool[1], pool[0]
-            puntero = 0
-        if not pool:
-            break
+        # Si AUN queda tiempo sin cubrir (pool insuficiente), reutiliza
+        # clips de escena desde el principio para no dejar negro
+        if tiempo_acumulado < limite_tramo - 0.1 and clips_escena:
+            random.shuffle(clips_escena)
+            tiempo_acumulado = _rellenar_con_pool(
+                clips_finales, tiempo_acumulado, limite_tramo, clips_escena, set()
+            )
 
-        ruta = pool[puntero]
-        puntero += 1
+        # Ultimo recurso absoluto: extiende el ultimo clip en vez de negro
+        if tiempo_acumulado < limite_tramo - 0.1 and clips_finales:
+            hueco = limite_tramo - tiempo_acumulado
+            try:
+                ultimo = clips_finales[-1]
+                # Repite el ultimo clip cubriendo el hueco
+                ruta_ultimo = None
+                # Busca en el pool un clip valido para el hueco
+                for ruta in pool_generico + (clips_escena if clips_escena else []):
+                    c = _preparar_clip(ruta, hueco)
+                    if c is not None:
+                        clips_finales.append(c)
+                        tiempo_acumulado += c.duration
+                        break
+                else:
+                    # Si no hay nada, usa imagen IA estatica en vez de negro
+                    if imagenes_ia:
+                        img_idx = i % len(imagenes_ia)
+                        c = ImageClip(imagenes_ia[img_idx]).set_duration(hueco)
+                        clips_finales.append(c)
+                        tiempo_acumulado += hueco
+            except Exception as e:
+                print(f"Aviso ultimo recurso tramo {i}: {e}")
 
+    # Cubre cualquier tiempo restante despues del ultimo tramo
+    if tiempo_acumulado < duracion_total - 0.1:
+        tiempo_acumulado = _rellenar_con_pool(
+            clips_finales, tiempo_acumulado, duracion_total, pool_generico, set()
+        )
+
+    # Si aun hay hueco, rellena con imagen IA en vez de negro
+    if tiempo_acumulado < duracion_total - 0.1 and imagenes_ia:
+        hueco = duracion_total - tiempo_acumulado
         try:
-            c = VideoFileClip(ruta).without_audio()
-        except Exception:
-            continue
-
-        if c.duration < 0.5:
-            c.close()
-            continue
-
-        escala = max(RESOLUCION[0] / c.w, RESOLUCION[1] / c.h)
-        c = c.resize(escala)
-        c = c.crop(x_center=c.w/2, y_center=c.h/2,
-                   width=RESOLUCION[0], height=RESOLUCION[1])
-
-        restante = (duracion_total + 2.5) - tiempo_acumulado
-        dur_clip = min(c.duration, restante, random.uniform(2.5, 5.0))
-        if dur_clip <= 0:
-            c.close()
-            continue
-
-        c = c.subclip(0, dur_clip)
-        clips_finales.append(c)
-        tiempo_acumulado += dur_clip
-        ultimo = ruta
+            c = ImageClip(imagenes_ia[0]).set_duration(hueco)
+            clips_finales.append(c)
+            tiempo_acumulado += hueco
+        except Exception as e:
+            print(f"Aviso imagen final: {e}")
 
     if not clips_finales:
         raise RuntimeError("No se pudo armar ningun clip")
 
     video_base = concatenate_videoclips(clips_finales, method="compose")
+    video_base = video_base.set_duration(duracion_total)
 
-    # Audio: voz empieza a los 2.5s (despues del intro)
-    audio_voz = audio_voz.set_start(2.5)
+    # Audio: voz desde el segundo 0
     audios = [audio_voz]
-
-    # Musica de fondo a volumen bajo
     if musica_path:
         try:
             musica = AudioFileClip(musica_path)
-            duracion_video = video_base.duration
-            if musica.duration < duracion_video:
+            if musica.duration < duracion_total:
                 import math
-                loops = math.ceil(duracion_video / musica.duration)
+                loops = math.ceil(duracion_total / musica.duration)
                 musica = concatenate_audioclips([musica] * loops)
-            musica = musica.subclip(0, duracion_video).volumex(0.12)
+            musica = musica.subclip(0, duracion_total).volumex(0.12)
             audios.append(musica)
         except Exception as e:
             print(f"Aviso musica fondo: {e}")
 
     audio_final = CompositeAudioClip(audios)
     video_base = video_base.set_audio(audio_final)
-    video_base = video_base.set_duration(duracion_total + 2.5)
 
-    # Subtitulos estilo viral - palabras individuales resaltadas
+    # Subtitulos estilo viral - palabras individuales
     subtitulos = []
     for seg in segmentos:
         palabras = seg["text"].strip().split()
@@ -635,7 +540,7 @@ def armar_video(clips_pexels, imagenes_ia, audio_path, segmentos,
         dur_palabra = duracion_seg / max(len(palabras), 1)
 
         for j, palabra in enumerate(palabras):
-            t_inicio = seg["start"] + 2.5 + (j * dur_palabra)
+            t_inicio = seg["start"] + (j * dur_palabra)
             t_fin = t_inicio + dur_palabra
 
             sombra = TextClip(
@@ -644,30 +549,33 @@ def armar_video(clips_pexels, imagenes_ia, audio_path, segmentos,
             ).set_start(t_inicio).set_end(t_fin).set_position(
                 (RESOLUCION[0]//2 - 3, int(RESOLUCION[1] * 0.72) + 3), True
             )
-
             txt = TextClip(
                 palabra.upper(), fontsize=90, color="white",
                 font="DejaVu-Sans-Bold", stroke_color=color_sub, stroke_width=3,
             ).set_start(t_inicio).set_end(t_fin).set_position(
                 ("center", 0.72), relative=True
             )
-
             subtitulos.append(sombra)
             subtitulos.append(txt)
 
-    intro_txt = TextClip(
-        NICHOS[nicho]["intro_texto"].upper(),
-        fontsize=55, color="white", font="DejaVu-Sans-Bold",
-        stroke_color=color_sub, stroke_width=2,
-        size=(RESOLUCION[0]-80, None), method="caption"
-    ).set_start(0).set_end(2.5).set_position(("center", 0.45), relative=True)
-    subtitulos.append(intro_txt)
+    # Hook superpuesto desde el segundo 0
+    hook_txt = TextClip(
+        hook_texto.upper(),
+        fontsize=64, color="white", font="DejaVu-Sans-Bold",
+        stroke_color=color_sub, stroke_width=3,
+        size=(RESOLUCION[0]-100, None), method="caption"
+    ).set_start(0).set_end(min(2.5, duracion_total)).set_position(
+        ("center", 0.38), relative=True
+    )
+    subtitulos.append(hook_txt)
 
     final = CompositeVideoClip([video_base, *subtitulos])
-    final = final.set_duration(duracion_total + 2.5)
+    final = final.set_duration(duracion_total)
 
-    final.write_videofile(salida, fps=30, codec="libx264", audio_codec="aac",
-                           threads=2, preset="ultrafast")
+    final.write_videofile(
+        salida, fps=30, codec="libx264", audio_codec="aac",
+        threads=2, preset="medium", bitrate="8000k",
+    )
     return salida
 
 
@@ -698,8 +606,7 @@ def subir_youtube(video_path: str, titulo: str, descripcion: str, tags: list):
 
 
 def main():
-    # Nicho fijado a "horror" para mantener consistencia del canal.
-    # Antes era: nicho = random.choice(list(NICHOS.keys()))
+    # Nicho fijado a "horror" para mantener consistencia de canal.
     nicho = "horror"
     print(f"Nicho: {nicho}")
 
@@ -707,21 +614,45 @@ def main():
     print(f"Personaje: {contenido['personaje']['nombre']}")
     print(f"Hook: {contenido.get('hook', '')}")
 
+    escenas = contenido.get("escenas", [])
     imagenes_ia = generar_imagenes_personaje(contenido)
-    intro_img = crear_intro_imagen(contenido.get("hook", NICHOS[nicho]["intro_texto"]), nicho)
+    clips_por_escena, pool_generico = descargar_clips_por_escena(escenas, nicho)
     musica_path = descargar_musica(nicho)
     audio_path = generar_audio(contenido["guion"])
     segmentos = transcribir(audio_path)
-    clips = descargar_clips(nicho)
+
+    hook_texto = contenido.get("hook", NICHOS[nicho]["intro_texto"])
 
     video_path = armar_video(
-        clips, imagenes_ia, audio_path, segmentos,
-        nicho, intro_img, musica_path
+        clips_por_escena, pool_generico, imagenes_ia, audio_path,
+        segmentos, nicho, hook_texto, musica_path
     )
 
-    titulo = contenido.get("titulo", "You Won't Believe This 😱")
-    descripcion = f"{contenido['guion']}\n\n#{nicho.replace('_', '')} #shorts"
-    tags = contenido.get("tags", [nicho, "shorts", "viral"])
+    titulo = contenido.get("titulo", "This Horror Story Will Keep You Up At Night 😱 #Shorts #Horror")
+
+    # Hashtags fijos de nicho + hashtags generados por Gemini para ese video.
+    # Regla 2026: 3-5 hashtags es lo optimo. Los primeros 3 del titulo
+    # son los que YouTube muestra encima del video. El resto va en descripcion.
+    # Mas de 60 hashtags hace que YouTube los ignore todos.
+    HASHTAGS_HORROR_FIJOS = [
+        "#horror", "#scary", "#creepypasta", "#horrorstory",
+        "#scarystories", "#shorts", "#paranormal", "#horrorshorts",
+        "#truescaryhorror", "#creepy", "#scaryfacts", "#horrorfan",
+    ]
+    tags_gemini = contenido.get("tags", ["horror", "scary", "shorts"])
+    tags_completos = list(dict.fromkeys(tags_gemini + [
+        "horror", "scary", "creepypasta", "horrorstory", "scarystories",
+        "shorts", "viral", "paranormal", "horrorshorts", "truescaryhorror",
+        "creepy", "scaryfacts", "horrorfan", "horrornarrative", "scaryshorts",
+    ]))
+
+    hashtags_desc = " ".join(HASHTAGS_HORROR_FIJOS)
+    descripcion = (
+        f"{contenido['guion']}\n\n"
+        f"⚠️ Watch until the end — the twist will haunt you.\n\n"
+        f"{hashtags_desc}"
+    )
+    tags = tags_completos
 
     subir_youtube(video_path, titulo, descripcion, tags)
 
