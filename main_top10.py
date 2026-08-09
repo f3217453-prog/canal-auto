@@ -92,30 +92,43 @@ CONSULTAS_RESPALDO = [
     "particles floating dark", "light rays dark room",
 ]
 
-PROMPT_SISTEMA = """You are a viral YouTube Shorts top 10 narrator specializing in dark, 
-mysterious, and disturbing content. Your audience loves horror and true crime.
+PROMPT_SISTEMA = """You are a viral YouTube Shorts top 10 narrator with 10 million subscribers.
+You specialize in dark, mysterious, and disturbing content. Your audience loves horror and true crime.
+You know exactly what titles get clicked and what countdowns keep people watching to number 1.
 
 Create a top 10 countdown script about: {tema}
 
-Rules:
-- Start with the hook immediately, no intro fluff
+COUNTDOWN RULES:
+- Open with the hook immediately — no intro, no "hey guys", straight into the tension
 - Number from 10 down to 1
-- Number 1 MUST be the most shocking entry — this drives viewers to watch to the end
-- Each entry is 1-2 punchy sentences MAX
-- Build tension progressively — each entry more disturbing than the last
-- 3 vivid visual scene descriptions for AI image generation (for entries 10, 5, and 1)
-- A hook line that stops the scroll instantly (short, works as bold on-screen text)
+- Number 1 MUST be the most shocking, disturbing, or unbelievable entry of all
+- Each entry: 1-2 punchy sentences MAX, no padding
+- Build tension progressively — every entry should feel more disturbing than the last
+- Tease number 1 mid-countdown ("but nothing compares to number 1...") to prevent drop-off
+- 3 vivid scene descriptions for AI image generation (entries 10, 5, and 1)
+
+HOOK RULES (most important element):
+- Under 10 words
+- Must create immediate dread, shock, or morbid curiosity
+- Examples: "Number 1 on this list was classified for 30 years." / "What happened at number 3 was never explained."
+
+TITLE RULES (critical for clicks):
+- Start with "Top 10" + dramatic descriptor
+- Include a power word: disturbing / terrifying / classified / forbidden / never explained / cursed
+- End with 😱 or 👁️ or ☠️
+- Add #Shorts #Horror at the very end of the title string
+- Example: "Top 10 Classified Secrets Governments Still Won't Explain 😱 #Shorts #Horror"
 
 STRICT: Write EVERYTHING in ENGLISH ONLY. Guion must be 100-140 words. No filler.
 
 Return ONLY valid JSON, no markdown, no backticks:
 {{
 "tema": "...(the specific top 10 topic)...",
-"hook": "...(one shocking sentence, short enough for bold text overlay)...",
-"guion": "...(full countdown narration, 100-140 words STRICT, punchy and dramatic)...",
-"escenas": ["visual phrase for entry 10", "visual phrase for entry 5", "visual phrase for entry 1"],
-"titulo": "...(viral YouTube title with number and emoji, e.g. 'Top 10 Scariest Places On Earth 😱')...",
-"tags": ["top10", "scary", "horror", "mystery", "shorts", "creepy", "disturbing"]
+"hook": "...(under 10 words, creates immediate dread or morbid curiosity)...",
+"guion": "...(full countdown narration 100-140 words STRICT, teases #1 mid-countdown)...",
+"escenas": ["filmable visual phrase entry 10", "filmable visual phrase entry 5", "filmable visual phrase entry 1"],
+"titulo": "...(clickbait title with power word + emoji + #Shorts #Horror at end)...",
+"tags": ["top10", "scary", "horror", "mystery", "shorts", "creepy", "disturbing", "horrorshorts", "scaryfacts", "paranormal"]
 }}"""
 
 CONSULTAS_ESCENA = {
@@ -305,25 +318,27 @@ def descargar_clips(escenas: list, carpeta: str = "clips_top10"):
     headers = {"Authorization": PEXELS_API_KEY}
     indice = 0
 
-    # Clips especificos por escena (entradas 10, 5 y 1 del top)
+    # 12 clips por escena para tener margen amplio
     clips_por_escena = []
     for escena in escenas:
-        rutas, indice = _buscar_clips(escena, headers, carpeta, indice, por_consulta=8)
+        rutas, indice = _buscar_clips(escena, headers, carpeta, indice, por_consulta=12)
         clips_por_escena.append(rutas)
 
-    # Pool generico de b-roll oscuro para rellenar entre escenas
+    # Pool generico a 12 clips por consulta
     pool_generico = []
     for consulta in CONSULTAS_BROLL_TOP10:
-        rutas, indice = _buscar_clips(consulta, headers, carpeta, indice, por_consulta=8)
+        rutas, indice = _buscar_clips(consulta, headers, carpeta, indice, por_consulta=12)
         pool_generico.extend(rutas)
 
     total = sum(len(c) for c in clips_por_escena) + len(pool_generico)
-    if total < 20:
+    if total < 40:
+        print(f"Solo {total} clips, descargando TODOS los respaldos...")
         for consulta in CONSULTAS_RESPALDO:
-            extra, indice = _buscar_clips(consulta, headers, carpeta, indice, por_consulta=8)
+            extra, indice = _buscar_clips(consulta, headers, carpeta, indice, por_consulta=12)
             pool_generico.extend(extra)
 
-    print(f"Total clips: {sum(len(c) for c in clips_por_escena) + len(pool_generico)}")
+    total_final = sum(len(c) for c in clips_por_escena) + len(pool_generico)
+    print(f"Total clips: {total_final}")
     return clips_por_escena, pool_generico
 
 
@@ -346,6 +361,33 @@ def _preparar_clip(ruta: str, dur_max: float):
     return c.subclip(0, dur_clip)
 
 
+def _rellenar_con_pool(clips_finales, tiempo_acumulado, limite,
+                        pool, usados, max_intentos=None):
+    """Rellena tiempo hasta 'limite' rotando el pool sin dejar huecos."""
+    if not pool:
+        return tiempo_acumulado
+    if max_intentos is None:
+        max_intentos = len(pool) * 3
+
+    intentos = 0
+    pool_idx = 0
+    pool_shuffled = list(pool)
+    random.shuffle(pool_shuffled)
+
+    while tiempo_acumulado < limite and intentos < max_intentos:
+        ruta = pool_shuffled[pool_idx % len(pool_shuffled)]
+        pool_idx += 1
+        intentos += 1
+        restante = limite - tiempo_acumulado
+        c = _preparar_clip(ruta, restante)
+        if c is None:
+            continue
+        clips_finales.append(c)
+        tiempo_acumulado += c.duration
+
+    return tiempo_acumulado
+
+
 def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
                  segmentos, hook_texto, musica_path, salida="video_top10.mp4"):
     audio_voz = AudioFileClip(audio_path)
@@ -356,7 +398,6 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
 
     clips_finales = []
     tiempo_acumulado = 0.0
-    usados_generico = set()
 
     for i in range(n_escenas):
         limite_tramo = (i + 1) * dur_por_escena
@@ -364,17 +405,17 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
         random.shuffle(clips_escena)
 
         # Imagen IA de esa escena si existe
-        if i < len(imagenes_ia):
+        if i < len(imagenes_ia) and imagenes_ia:
             try:
                 dur = min(2.5, limite_tramo - tiempo_acumulado)
-                if dur > 0:
+                if dur > 0.1:
                     c = ImageClip(imagenes_ia[i]).set_duration(dur)
                     clips_finales.append(c)
                     tiempo_acumulado += dur
             except Exception as e:
                 print(f"Aviso imagen escena {i}: {e}")
 
-        # Clips especificos de esa escena
+        # Clips especificos de la escena
         puntero = 0
         while tiempo_acumulado < limite_tramo and puntero < len(clips_escena):
             restante = limite_tramo - tiempo_acumulado
@@ -385,29 +426,43 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
             clips_finales.append(c)
             tiempo_acumulado += c.duration
 
-        # Relleno con pool generico
-        intentos = 0
-        while tiempo_acumulado < limite_tramo and pool_generico and intentos < len(pool_generico) * 2:
-            candidatos = [p for p in pool_generico if p not in usados_generico] or pool_generico
-            ruta = random.choice(candidatos)
-            usados_generico.add(ruta)
-            restante = limite_tramo - tiempo_acumulado
-            c = _preparar_clip(ruta, restante)
-            intentos += 1
-            if c is None:
-                continue
-            clips_finales.append(c)
-            tiempo_acumulado += c.duration
+        # Relleno con pool generico (rota sin limite para no dejar negro)
+        tiempo_acumulado = _rellenar_con_pool(
+            clips_finales, tiempo_acumulado, limite_tramo, pool_generico, set()
+        )
 
-    # Cubre tiempo restante
-    while tiempo_acumulado < duracion_total and pool_generico:
-        ruta = random.choice(pool_generico)
-        restante = duracion_total - tiempo_acumulado
-        c = _preparar_clip(ruta, restante)
-        if c is None:
-            break
-        clips_finales.append(c)
-        tiempo_acumulado += c.duration
+        # Si aun queda hueco, reutiliza clips de escena
+        if tiempo_acumulado < limite_tramo - 0.1 and clips_escena:
+            random.shuffle(clips_escena)
+            tiempo_acumulado = _rellenar_con_pool(
+                clips_finales, tiempo_acumulado, limite_tramo, clips_escena, set()
+            )
+
+        # Ultimo recurso: imagen IA en vez de negro
+        if tiempo_acumulado < limite_tramo - 0.1 and imagenes_ia:
+            hueco = limite_tramo - tiempo_acumulado
+            try:
+                img_idx = i % len(imagenes_ia)
+                c = ImageClip(imagenes_ia[img_idx]).set_duration(hueco)
+                clips_finales.append(c)
+                tiempo_acumulado += hueco
+            except Exception as e:
+                print(f"Aviso imagen emergencia tramo {i}: {e}")
+
+    # Tiempo restante tras el ultimo tramo
+    if tiempo_acumulado < duracion_total - 0.1:
+        tiempo_acumulado = _rellenar_con_pool(
+            clips_finales, tiempo_acumulado, duracion_total, pool_generico, set()
+        )
+
+    # Si aun hay hueco, imagen IA en vez de negro
+    if tiempo_acumulado < duracion_total - 0.1 and imagenes_ia:
+        hueco = duracion_total - tiempo_acumulado
+        try:
+            c = ImageClip(imagenes_ia[0]).set_duration(hueco)
+            clips_finales.append(c)
+        except Exception as e:
+            print(f"Aviso imagen final: {e}")
 
     if not clips_finales:
         raise RuntimeError("No se pudo armar ningun clip")
@@ -531,9 +586,30 @@ def main():
         audio_path, segmentos, hook_texto, musica_path
     )
 
-    titulo = contenido.get("titulo", "Top 10 Scariest Things Ever 😱")
-    descripcion = f"{contenido['guion']}\n\n#top10 #scary #horror #shorts"
-    tags = contenido.get("tags", ["top10", "scary", "horror", "shorts"])
+    titulo = contenido.get("titulo", "Top 10 Most Disturbing Mysteries Never Explained 😱 #Shorts #Horror")
+
+    # Hashtags optimizados para nicho oscuro/misterio/top10.
+    # Regla 2026: 3-5 en titulo (los primeros 3 aparecen encima del video),
+    # resto en descripcion. Maximo 60 en total o YouTube los ignora todos.
+    HASHTAGS_TOP10_FIJOS = [
+        "#shorts", "#horror", "#top10", "#scary",
+        "#mystery", "#creepy", "#disturbing", "#paranormal",
+        "#scaryfacts", "#horrorshorts", "#truecrime", "#unexplained",
+    ]
+    tags_gemini = contenido.get("tags", ["top10", "scary", "horror", "shorts"])
+    tags_completos = list(dict.fromkeys(tags_gemini + [
+        "top10", "scary", "horror", "mystery", "shorts", "viral",
+        "creepy", "disturbing", "paranormal", "scaryfacts", "horrorshorts",
+        "truecrime", "unexplained", "darkfacts", "scaryshorts",
+    ]))
+
+    hashtags_desc = " ".join(HASHTAGS_TOP10_FIJOS)
+    descripcion = (
+        f"{contenido['guion']}\n\n"
+        f"⚠️ Stay until number 1 — it will change how you see the world.\n\n"
+        f"{hashtags_desc}"
+    )
+    tags = tags_completos
 
     subir_youtube(video_path, titulo, descripcion, tags)
 
