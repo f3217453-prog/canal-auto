@@ -42,7 +42,7 @@ YOUTUBE_CLIENT_SECRET = os.environ["YOUTUBE_CLIENT_SECRET"]
 YOUTUBE_REFRESH_TOKEN = os.environ["YOUTUBE_REFRESH_TOKEN"]
 HF_TOKEN = os.environ["HF_TOKEN"]
 
-VOZ = "en-US-AndrewNeural"
+VOZ = "en-US-AndrewNeural"  # fallback, se sobreescribe por el pool abajo
 RESOLUCION = (1080, 1920)
 HF_MODEL = "stabilityai/stable-diffusion-xl-base-1.0"
 MODELOS_GEMINI = ["gemini-3.5-flash", "gemini-3.1-flash-lite"]
@@ -52,10 +52,27 @@ NEGATIVE_PROMPT = (
     "logo, disfigured face, low quality, low resolution, duplicate"
 )
 
+# Pool de voces para horror basado en datos 2026:
+# - Voces graves masculinas: autoridad y dread natural
+# - Voces britanicas RP: funciona especialmente para horror gotico
+# - Voz femenina misteriosa: contraste que engancha en el feed
+# Se elige una distinta al azar en cada video para dar variedad al canal
+VOCES_HORROR = [
+    "en-US-AndrewNeural",       # masculina dramatica, voz principal actual
+    "en-GB-RyanNeural",         # masculina britanica grave, horror gotico
+    "en-GB-ThomasNeural",       # masculina britanica mas joven
+    "en-US-ChristopherNeural",  # masculina profunda americana
+    "en-GB-LibbyNeural",        # femenina britanica misteriosa
+    "en-AU-WilliamNeural",      # masculina australiana grave
+]
+
+# Musica con variedad: 4 tracks distintos para no repetir siempre el mismo
 MUSICA_AMBIENTE = {
     "horror": [
         "https://cdn.pixabay.com/download/audio/2022/03/10/audio_270f4b1fbe.mp3",
         "https://cdn.pixabay.com/download/audio/2021/09/06/audio_dad6b6ef7f.mp3",
+        "https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3",
+        "https://cdn.pixabay.com/download/audio/2021/08/09/audio_99bbbd8a4c.mp3",
     ],
 }
 
@@ -267,13 +284,38 @@ def descargar_musica(nicho: str) -> str:
         return None
 
 
-async def _tts(texto: str, salida: str):
-    comunicador = edge_tts.Communicate(texto, VOZ)
+def _descargar_efecto_sonido(url: str, destino: str) -> str:
+    """Descarga un efecto de sonido libre de derechos."""
+    try:
+        r = requests.get(url, timeout=20, stream=True)
+        r.raise_for_status()
+        with open(destino, "wb") as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+        return destino
+    except Exception as e:
+        print(f"Aviso efecto sonido: {e}")
+        return None
+
+
+# Efectos de suspenso libres de derechos (Pixabay)
+EFECTOS_SUSPENSO = [
+    "https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73467.mp3",
+    "https://cdn.pixabay.com/download/audio/2022/01/27/audio_d0c6ff1d24.mp3",
+    "https://cdn.pixabay.com/download/audio/2021/11/25/audio_5bbc9a1a1c.mp3",
+]
+
+
+async def _tts(texto: str, salida: str, voz: str):
+    comunicador = edge_tts.Communicate(texto, voz)
     await comunicador.save(salida)
 
 
 def generar_audio(texto: str, salida: str = "audio.mp3"):
-    asyncio.run(_tts(texto, salida))
+    # Elige voz distinta al azar en cada video
+    voz = random.choice(VOCES_HORROR)
+    print(f"Voz seleccionada: {voz}")
+    asyncio.run(_tts(texto, salida, voz))
     return salida
 
 
@@ -364,7 +406,8 @@ def _preparar_clip(ruta: str, dur_max: float):
     c = c.resize(escala)
     c = c.crop(x_center=c.w/2, y_center=c.h/2,
                width=RESOLUCION[0], height=RESOLUCION[1])
-    dur_clip = min(c.duration, dur_max, random.uniform(2.0, 4.0))
+    # Clips cortos (1.5-3s) para ritmo rapido tipo TikTok/Shorts viral
+    dur_clip = min(c.duration, dur_max, random.uniform(1.5, 3.0))
     if dur_clip <= 0:
         c.close()
         return None
@@ -515,6 +558,9 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
 
     # Audio: voz desde el segundo 0
     audios = [audio_voz]
+
+    # Musica de fondo a volumen mas alto (0.18 en vez de 0.12)
+    # para mayor intensidad en shorts de horror
     if musica_path:
         try:
             musica = AudioFileClip(musica_path)
@@ -522,15 +568,46 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
                 import math
                 loops = math.ceil(duracion_total / musica.duration)
                 musica = concatenate_audioclips([musica] * loops)
-            musica = musica.subclip(0, duracion_total).volumex(0.12)
+            musica = musica.subclip(0, duracion_total).volumex(0.18)
             audios.append(musica)
         except Exception as e:
             print(f"Aviso musica fondo: {e}")
+
+    # Efectos de suspenso entre escenas (en los puntos de transicion)
+    # Basado en dato: efectos de sonido inesperados aumentan retencion
+    # al crear momentos de pico de atencion en el video
+    n_escenas = max(len(clips_por_escena), 1)
+    puntos_transicion = [
+        (duracion_total / n_escenas) * i
+        for i in range(1, n_escenas)
+        if (duracion_total / n_escenas) * i < duracion_total - 1.0
+    ]
+    for t_trans in puntos_transicion:
+        url_efecto = random.choice(EFECTOS_SUSPENSO)
+        ruta_efecto = f"efecto_{int(t_trans)}.mp3"
+        ruta_efecto = _descargar_efecto_sonido(url_efecto, ruta_efecto)
+        if ruta_efecto:
+            try:
+                efecto = AudioFileClip(ruta_efecto)
+                # Cortar el efecto a 1.5s maximo para no tapar la narracion
+                dur_efecto = min(efecto.duration, 1.5)
+                efecto = efecto.subclip(0, dur_efecto).volumex(0.35).set_start(t_trans)
+                audios.append(efecto)
+            except Exception as e:
+                print(f"Aviso efecto {t_trans}: {e}")
 
     audio_final = CompositeAudioClip(audios)
     video_base = video_base.set_audio(audio_final)
 
     # Subtitulos estilo viral - palabras individuales
+    # Palabras clave de horror resaltadas en rojo mas intenso
+    PALABRAS_CLAVE_HORROR = {
+        "dead", "died", "death", "killed", "murder", "blood", "scream",
+        "never", "alone", "dark", "shadow", "door", "eyes", "run",
+        "help", "gone", "disappear", "found", "body", "voice", "something",
+        "followed", "watched", "hide", "wrong", "survive", "trapped",
+    }
+
     subtitulos = []
     for seg in segmentos:
         palabras = seg["text"].strip().split()
@@ -543,14 +620,20 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
             t_inicio = seg["start"] + (j * dur_palabra)
             t_fin = t_inicio + dur_palabra
 
+            # Palabras clave de horror en rojo vivo, resto en blanco
+            es_clave = palabra.lower().strip(".,!?;:") in PALABRAS_CLAVE_HORROR
+            color_palabra = "#FF0000" if es_clave else "white"
+            # Palabras clave ligeramente mas grandes para enfasis
+            tam = 95 if es_clave else 90
+
             sombra = TextClip(
-                palabra.upper(), fontsize=90, color="black",
+                palabra.upper(), fontsize=tam, color="black",
                 font="DejaVu-Sans-Bold", stroke_color="black", stroke_width=4,
             ).set_start(t_inicio).set_end(t_fin).set_position(
                 (RESOLUCION[0]//2 - 3, int(RESOLUCION[1] * 0.72) + 3), True
             )
             txt = TextClip(
-                palabra.upper(), fontsize=90, color="white",
+                palabra.upper(), fontsize=tam, color=color_palabra,
                 font="DejaVu-Sans-Bold", stroke_color=color_sub, stroke_width=3,
             ).set_start(t_inicio).set_end(t_fin).set_position(
                 ("center", 0.72), relative=True
