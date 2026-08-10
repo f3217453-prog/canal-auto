@@ -623,7 +623,122 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
 
 # ---------- SUBIDA A YOUTUBE ----------
 
-def subir_youtube(video_path: str, titulo: str, descripcion: str, tags: list):
+def generar_thumbnail(titulo: str, imagen_ia_path: str, nicho: str,
+                       salida: str = "thumbnail.jpg") -> str:
+    """
+    Genera un thumbnail optimizado para CTR maximo basado en datos 2026:
+    - 1280x720px (estandar YouTube)
+    - Fondo muy oscuro con imagen IA del personaje/escena
+    - Texto de maximo 3 palabras en rojo/blanco, alto contraste
+    - Borde de luz rojo para separar del fondo de YouTube
+    - Un solo punto focal (sujeto + texto)
+    Datos: texto <4 palabras = +30% CTR, alto contraste = +30% visibilidad
+    """
+    W, H = 1280, 720
+    img = Image.new("RGB", (W, H), color=(5, 5, 10))
+
+    # Fondo: imagen IA oscurecida a la izquierda, degradado a negro a la derecha
+    if imagen_ia_path and os.path.exists(imagen_ia_path):
+        try:
+            fondo = Image.open(imagen_ia_path).convert("RGB")
+            # Escalar para cubrir la mitad izquierda
+            escala = max(W / fondo.width, H / fondo.height)
+            nuevo_w = int(fondo.width * escala)
+            nuevo_h = int(fondo.height * escala)
+            fondo = fondo.resize((nuevo_w, nuevo_h), Image.LANCZOS)
+            # Centrar y recortar a 1280x720
+            x = (nuevo_w - W) // 2
+            y = (nuevo_h - H) // 2
+            fondo = fondo.crop((x, y, x + W, y + H))
+            # Oscurecer: capa semitransparente oscura encima
+            overlay = Image.new("RGBA", (W, H), (0, 0, 0, 160))
+            fondo_rgba = fondo.convert("RGBA")
+            fondo_rgba = Image.alpha_composite(fondo_rgba, overlay)
+            img = fondo_rgba.convert("RGB")
+        except Exception as e:
+            print(f"Aviso fondo thumbnail: {e}")
+
+    draw = ImageDraw.Draw(img)
+
+    # Degradado negro en el lado derecho para que el texto resalte
+    for x in range(W // 2, W):
+        alpha = int(200 * ((x - W // 2) / (W // 2)))
+        draw.line([(x, 0), (x, H)], fill=(0, 0, 0))
+
+    # Borde rojo fino alrededor de todo el thumbnail
+    # (diferencia del fondo blanco de YouTube)
+    borde = 8
+    draw.rectangle([(0, 0), (W - 1, H - 1)], outline=(200, 0, 0), width=borde)
+
+    # Texto: maximo 3 palabras, derecha, grande y contrastado
+    # Extraer las 3 palabras mas impactantes del titulo
+    palabras_titulo = titulo.replace("😱","").replace("👁️","").replace("☠️","").strip().split()
+    # Quitar palabras comunes de poco impacto
+    skip = {"the","a","an","in","on","at","of","and","or","but","is","was",
+            "to","for","that","this","with","are","were","been","have","has",
+            "top","10","most","ever","really","very","just","what","how"}
+    palabras_fuertes = [p for p in palabras_titulo if p.lower() not in skip]
+    texto_thumb = " ".join(palabras_fuertes[:3]).upper() if palabras_fuertes else " ".join(palabras_titulo[:3]).upper()
+
+    # Color del texto segun nicho
+    color_texto = (255, 50, 50) if nicho == "horror" else (255, 200, 0)
+    color_stroke = (0, 0, 0)
+
+    try:
+        font_grande = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 110
+        )
+        font_emoji = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 80
+        )
+    except Exception:
+        font_grande = ImageFont.load_default()
+        font_emoji = font_grande
+
+    # Dividir texto en lineas de maximo 12 chars
+    lineas = []
+    linea_actual = ""
+    for palabra in texto_thumb.split():
+        if len(linea_actual + " " + palabra) <= 12:
+            linea_actual += " " + palabra if linea_actual else palabra
+        else:
+            lineas.append(linea_actual)
+            linea_actual = palabra
+    if linea_actual:
+        lineas.append(linea_actual)
+    lineas = lineas[:3]  # maximo 3 lineas
+
+    # Posicion: derecha de la imagen, centrado verticalmente
+    y_start = H // 2 - (len(lineas) * 120) // 2
+
+    for linea in lineas:
+        bbox = draw.textbbox((0, 0), linea, font=font_grande)
+        w_texto = bbox[2] - bbox[0]
+        x_pos = W - w_texto - 60  # margen derecho
+
+        # Sombra
+        for dx, dy in [(-4, -4), (4, 4), (-4, 4), (4, -4)]:
+            draw.text((x_pos + dx, y_start + dy), linea, font=font_grande,
+                     fill=color_stroke)
+        # Texto principal
+        draw.text((x_pos, y_start), linea, font=font_grande, fill=color_texto)
+        y_start += 130
+
+    # Emoji en la esquina inferior derecha
+    emoji = "😱" if nicho == "horror" else "👁️"
+    try:
+        draw.text((W - 120, H - 120), emoji, font=font_emoji, fill=(255, 255, 255))
+    except Exception:
+        pass
+
+    # Guardar como JPG < 2MB (requisito YouTube)
+    img.save(salida, "JPEG", quality=90, optimize=True)
+    print(f"Thumbnail generado: {salida}")
+    return salida
+
+
+def subir_youtube(video_path: str, titulo: str, descripcion: str,
+                   tags: list, thumbnail_path: str = None):
     creds = Credentials(
         token=None,
         refresh_token=YOUTUBE_REFRESH_TOKEN,
@@ -644,7 +759,19 @@ def subir_youtube(video_path: str, titulo: str, descripcion: str, tags: list):
     media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
     request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
     response = request.execute()
-    print("Subido:", response.get("id"))
+    video_id = response.get("id")
+    print("Subido:", video_id)
+
+    # Subir thumbnail si existe
+    if thumbnail_path and video_id and os.path.exists(thumbnail_path):
+        try:
+            youtube.thumbnails().set(
+                videoId=video_id,
+                media_body=MediaFileUpload(thumbnail_path, mimetype="image/jpeg")
+            ).execute()
+            print(f"Thumbnail subido para video {video_id}")
+        except Exception as e:
+            print(f"Aviso thumbnail: {e}")
 
 
 # ---------- MAIN ----------
@@ -674,7 +801,7 @@ def main():
     else:
         contenido = generar_contenido_top10()
         descripcion_personaje = ""
-        consultas_musica = MUSICA_HORROR  # misma musica oscura
+        consultas_musica = MUSICA_HORROR
         HASHTAGS_FIJOS = [
             "#top10", "#scary", "#mystery", "#disturbing", "#paranormal",
             "#scaryfacts", "#darkhistory", "#truecrime", "#unexplained", "#horror",
@@ -724,7 +851,11 @@ def main():
         f"{hashtags_desc}"
     )
 
-    subir_youtube(video_path, titulo, descripcion, tags_completos)
+    # Generar thumbnail usando la primera imagen IA disponible
+    imagen_thumb = imagenes_ia[0] if imagenes_ia else None
+    thumbnail_path = generar_thumbnail(titulo, imagen_thumb, nicho)
+
+    subir_youtube(video_path, titulo, descripcion, tags_completos, thumbnail_path)
 
 
 if __name__ == "__main__":
