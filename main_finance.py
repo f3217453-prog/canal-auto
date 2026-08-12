@@ -43,14 +43,19 @@ NEGATIVE_PROMPT = (
     "logo, disfigured face, low quality, low resolution, duplicate"
 )
 
-# Voces autoritativas y confiables para finanzas
+# Pool de 8 voces variadas para WealthSnap - alternan en cada video
+# para que el canal no suene siempre igual.
+# Masculinas autoritativas: Andrew, Christopher, Guy (americanas), Ryan, Thomas (britanicas), William (australiana)
+# Femeninas profesionales: Jenny (americana), Sonia (britanica)
 VOCES_FINANCE = [
-    "en-US-AndrewNeural",
-    "en-US-ChristopherNeural",
-    "en-GB-RyanNeural",
-    "en-AU-WilliamNeural",
-    "en-US-GuyNeural",
-    "en-GB-ThomasNeural",
+    "en-US-AndrewNeural",       # masculina americana autoritativa
+    "en-US-ChristopherNeural",  # masculina americana profunda
+    "en-US-GuyNeural",          # masculina americana energetica
+    "en-GB-RyanNeural",         # masculina britanica seria
+    "en-GB-ThomasNeural",       # masculina britanica mas joven
+    "en-AU-WilliamNeural",      # masculina australiana grave
+    "en-US-JennyNeural",        # femenina americana profesional
+    "en-GB-SoniaNeural",        # femenina britanica clara
 ]
 
 MUSICA_FINANCE = [
@@ -332,7 +337,9 @@ def _preparar_clip(ruta, dur_max):
     c = c.resize(escala)
     c = c.crop(x_center=c.w/2, y_center=c.h/2,
                width=RESOLUCION[0], height=RESOLUCION[1])
-    dur_clip = min(c.duration, dur_max, random.uniform(1.5, 3.0))
+    # Clips cinematograficos (3-5s) para ritmo mas pausado y profesional
+    # apropiado para contenido financiero serio
+    dur_clip = min(c.duration, dur_max, random.uniform(3.0, 5.0))
     if dur_clip <= 0:
         c.close()
         return None
@@ -412,19 +419,23 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
     if not clips_finales:
         raise RuntimeError("No se pudo armar ningun clip")
 
+    # El video tiene 2.5s extra al inicio para el hook visual
+    duracion_video = duracion_total + 2.5
     video_base = concatenate_videoclips(clips_finales, method="compose")
-    video_base = video_base.set_duration(duracion_total)
+    video_base = video_base.set_duration(duracion_video)
 
-    audios = [audio_voz]
+    # La narracion empieza a los 2.5s (despues del hook visual)
+    audio_voz_delayed = audio_voz.set_start(2.5)
+    audios = [audio_voz_delayed]
     if musica_path:
         try:
             musica = AudioFileClip(musica_path)
-            if musica.duration < duracion_total:
+            if musica.duration < duracion_video:
                 import math
                 musica = concatenate_audioclips(
-                    [musica] * math.ceil(duracion_total / musica.duration)
+                    [musica] * math.ceil(duracion_video / musica.duration)
                 )
-            audios.append(musica.subclip(0, duracion_total).volumex(0.12))
+            audios.append(musica.subclip(0, duracion_video).volumex(0.12))
         except Exception as e:
             print(f"Aviso musica: {e}")
 
@@ -432,6 +443,41 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
 
     color_sub = subnicho["color_sub"]
     color_hook = subnicho["color_hook"]
+
+    # Hook visual: los primeros 2.5s muestran el hook en texto grande
+    # centrado sobre el primer clip oscurecido, sin narración todavía.
+    # Basado en dato: los primeros 3s son los más críticos para retención
+    # y un hook visual claro detiene el scroll mejor que solo audio.
+    subtitulos = []
+
+    # Overlay oscuro solo en los primeros 2.5s para destacar el hook
+    overlay_inicio = (
+        ImageClip(
+            __import__("numpy").zeros((RESOLUCION[1], RESOLUCION[0], 3),
+                                      dtype=__import__("numpy").uint8)
+        )
+        .set_opacity(0.55)
+        .set_start(0)
+        .set_end(min(2.5, duracion_total))
+    )
+
+    # Hook en texto grande centrado, primeros 2.5s
+    hook_display = TextClip(
+        hook_texto.upper(),
+        fontsize=72, color="white", font="DejaVu-Sans-Bold",
+        stroke_color=color_hook, stroke_width=4,
+        size=(RESOLUCION[0] - 80, None), method="caption"
+    ).set_start(0).set_end(min(2.5, duracion_total)).set_position("center")
+    subtitulos.append(hook_display)
+
+    # Etiqueta "WEALTHSNAP" pequeña encima del hook durante los primeros 2.5s
+    label = TextClip(
+        "💰 WEALTHSNAP", fontsize=45, color=color_hook,
+        font="DejaVu-Sans-Bold", stroke_color="black", stroke_width=2,
+    ).set_start(0).set_end(min(2.5, duracion_total)).set_position(
+        ("center", 0.25), relative=True
+    )
+    subtitulos.append(label)
 
     # Palabras clave de finanzas resaltadas en verde/dorado
     PALABRAS_CLAVE_FINANCE = {
@@ -441,7 +487,6 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
         "wealthy", "millionaire", "billionaire", "secret", "mistake",
     }
 
-    subtitulos = []
     for seg in segmentos:
         palabras = seg["text"].strip().split()
         if not palabras:
@@ -476,7 +521,9 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
         ("center", 0.38), relative=True
     ))
 
-    final = CompositeVideoClip([video_base, *subtitulos]).set_duration(duracion_total)
+    final = CompositeVideoClip(
+        [video_base, overlay_inicio, *subtitulos]
+    ).set_duration(duracion_video)
     final.write_videofile(
         salida, fps=30, codec="libx264", audio_codec="aac",
         threads=2, preset="medium", bitrate="8000k"
