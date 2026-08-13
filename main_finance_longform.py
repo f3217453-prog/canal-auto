@@ -338,7 +338,7 @@ def generar_audio(texto, salida="audio_finance_long.mp3"):
 
 
 def transcribir(audio_path):
-    return whisper.load_model("small").transcribe(audio_path, language="en")["segments"]
+    return whisper.load_model("base").transcribe(audio_path, language="en")["segments"]
 
 
 def _buscar_clips(consulta, headers, carpeta, indice, por_consulta=10):
@@ -536,7 +536,7 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
     final = CompositeVideoClip([video_base, *subtitulos]).set_duration(duracion_total)
     final.write_videofile(
         salida, fps=30, codec="libx264", audio_codec="aac",
-        threads=4, preset="ultrafast", bitrate="5000k"
+        threads=4, preset="ultrafast", bitrate="4000k"
     )
     return salida
 
