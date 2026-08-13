@@ -140,40 +140,49 @@ CONSULTAS_RESPALDO = [
     "investment wealth building", "money management planning",
 ]
 
-PROMPT_TOP10 = """You are a viral YouTube Shorts finance narrator for WealthSnap channel.
-Your audience wants to learn money secrets, wealth habits, and financial facts fast.
-CPM goal: $18-$45. Content must be accurate, specific, and actionable.
+PROMPT_TOP10 = """You are a viral finance YouTuber for WealthSnap with 10M subscribers.
+Your hooks stop people mid-scroll. Your titles make people click instantly.
+Data: best finance Shorts use "You're losing $X" patterns (+40% CTR vs generic hooks).
+Specific dollar amounts in titles outperform vague titles every time.
 
 Create a top 10 countdown about: {tema}
 
-RULES:
-- Start with the hook IMMEDIATELY — no intro, straight into the value
-- Number from 10 down to 1
-- Number 1 must be the most surprising, impactful, or counterintuitive entry
-- Each entry: 1-2 punchy sentences with SPECIFIC details (percentages, amounts, names)
-- Build value progressively — each entry more surprising than the last
-- At entry 5 tease #1: "but the most important one is coming at number 1..."
-- Use real data and specific numbers — vague tips kill credibility
-- 3 vivid scene descriptions for AI image generation (professional, financial aesthetic)
+HOOK RULES (most critical element — this determines 70-90% of your views):
+- Under 8 words
+- Must use ONE of these proven patterns:
+  * LOSS FRAME: "You're losing $X every month doing this."
+  * SHOCKING FACT: "X% of Americans will never retire. Here's why."
+  * PERSONAL ATTACK: "Your bank is legally stealing from you."
+  * URGENCY: "Stop doing this before it costs you $50K."
+  * CURIOSITY GAP: "The one money rule rich people never break."
+- NEVER start with "Did you know" or "Here are" — those kill retention instantly
+- Must feel personal, urgent, and slightly uncomfortable
 
-HOOK: Under 10 words. Creates immediate curiosity or reveals a surprising fact.
-Examples: "90% of millionaires share this one habit." / "This mistake costs you $500K."
+COUNTDOWN RULES:
+- Start with hook IMMEDIATELY — zero intro, zero filler
+- Numbers 10→1, each entry 1-2 punchy sentences with SPECIFIC data ($, %, real names)
+- Every entry should make the viewer feel they're learning something slightly illegal or secret
+- At #5 say: "but the habit that separates the 1% is coming at number 1..."
+- #1 must be the most counterintuitive or shocking entry of all
 
-TITLE RULES:
-- Start with "Top 10"
-- Power word: shocking / brutal / secret / nobody / millionaire / broke
-- End with 💰 or 📈 or 🤑
-- Add #Shorts #Finance at end of title
+TITLE RULES (drives clicks from browse):
+- Under 40 characters (mobile truncates longer)
+- Specific dollar amount OR percentage always beats vague
+- Pattern: "Top 10 [shocking adjective] [specific topic] 💰"
+- Examples: "Top 10 Ways Banks Rob You Daily 💰" / "Top 10 Habits That Keep You Broke 🤑"
+- Add #Shorts #Finance at the very end
 
-STRICT: 100-130 words ENGLISH ONLY. Every sentence must deliver real value.
+3 scene descriptions for AI images (professional, cinematic, clean aesthetic)
+
+STRICT: 100-120 words ENGLISH ONLY. No filler. Every word earns its place.
 
 Return ONLY valid JSON, no markdown, no backticks:
 {{
-"hook": "...(under 10 words, specific and surprising)...",
-"guion": "...(100-130 words STRICT, countdown 10 to 1 with specific data)...",
-"escenas": ["professional financial visual 1", "financial visual 2", "financial visual 3"],
-"titulo": "...(Top 10 title + emoji + #Shorts #Finance)...",
-"tags": ["finance", "money", "personalfinance", "wealth", "investing", "top10", "shorts", "rich", "millionaire", "financetips"]
+"hook": "...(under 8 words, uses a proven pattern above)...",
+"guion": "...(100-120 words STRICT, starts with hook, builds to shocking #1)...",
+"escenas": ["clean professional financial visual 1", "financial visual 2", "financial visual 3"],
+"titulo": "...(under 40 chars + emoji + #Shorts #Finance)...",
+"tags": ["finance", "money", "personalfinance", "wealth", "investing", "top10", "shorts", "rich", "millionaire", "financetips", "moneyhacks", "financialfreedom"]
 }}"""
 
 
