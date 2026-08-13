@@ -233,8 +233,9 @@ def generar_imagen_ia(prompt: str, indice: int, carpeta: str = "imagenes_finance
 
 
 def generar_imagenes(escenas: list) -> list:
+    # Reducido a 3 imagenes (antes 5) para ahorrar RAM y tiempo de generacion
     return [
-        ruta for i, escena in enumerate(escenas[:5])
+        ruta for i, escena in enumerate(escenas[:3])
         if (ruta := generar_imagen_ia(f"{escena}, professional finance", i))
     ]
 
@@ -354,7 +355,13 @@ def generar_audio(texto, salida="audio_finance_long.mp3"):
 
 
 def transcribir(audio_path):
-    return whisper.load_model("base").transcribe(audio_path, language="en")["segments"]
+    modelo = whisper.load_model("base")
+    resultado = modelo.transcribe(audio_path, language="en")["segments"]
+    # Liberar memoria RAM inmediatamente despues de transcribir
+    del modelo
+    import gc
+    gc.collect()
+    return resultado
 
 
 def _buscar_clips(consulta, headers, carpeta, indice, por_consulta=10):
@@ -370,7 +377,7 @@ def _buscar_clips(consulta, headers, carpeta, indice, por_consulta=10):
             archivos = sorted(v["video_files"], key=lambda f: f.get("width", 0))
             if not archivos:
                 continue
-            enlace = archivos[-1]["link"]
+            enlace = archivos[len(archivos)//2]["link"]  # calidad media, no maxima
             destino = f"{carpeta}/clip_{idx}.mp4"
             try:
                 with requests.get(enlace, stream=True, timeout=60) as resp:
@@ -387,21 +394,24 @@ def _buscar_clips(consulta, headers, carpeta, indice, por_consulta=10):
 
 
 def descargar_clips(escenas, formato, carpeta="clips_finance_long"):
+    """Descarga clips reducidos para no agotar la RAM del runner (exit code 143)."""
     os.makedirs(carpeta, exist_ok=True)
     headers = {"Authorization": PEXELS_API_KEY}
     indice = 0
     clips_por_escena = []
     for escena in escenas:
-        rutas, indice = _buscar_clips(escena, headers, carpeta, indice, 10)
+        # Reducido a 5 clips por escena (antes 10) para ahorrar RAM
+        rutas, indice = _buscar_clips(escena, headers, carpeta, indice, 5)
         clips_por_escena.append(rutas)
     pool_generico = []
     for consulta in formato["consultas_broll"]:
-        rutas, indice = _buscar_clips(consulta, headers, carpeta, indice, 10)
+        # Reducido a 5 clips por consulta (antes 10)
+        rutas, indice = _buscar_clips(consulta, headers, carpeta, indice, 5)
         pool_generico.extend(rutas)
     total = sum(len(c) for c in clips_por_escena) + len(pool_generico)
-    if total < 30:
+    if total < 15:
         for consulta in CONSULTAS_RESPALDO:
-            extra, indice = _buscar_clips(consulta, headers, carpeta, indice, 10)
+            extra, indice = _buscar_clips(consulta, headers, carpeta, indice, 5)
             pool_generico.extend(extra)
     print(f"Total clips: {sum(len(c) for c in clips_por_escena) + len(pool_generico)}")
     return clips_por_escena, pool_generico
