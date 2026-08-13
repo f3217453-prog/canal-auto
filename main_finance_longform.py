@@ -240,9 +240,19 @@ def generar_imagenes(escenas: list) -> list:
 
 
 def generar_thumbnail(titulo: str, imagen_ia_path: str, salida: str = "thumbnail_finance.jpg") -> str:
+    """
+    Thumbnail clickbait basado en datos 2026:
+    - Fondo muy oscuro con imagen IA
+    - Texto grande en verde brillante (color del dinero) + dorado para numeros
+    - Texto del titulo completo visible (no solo 3 palabras)
+    - Badge WealthSnap en esquina inferior izquierda
+    - Borde verde brillante para separar del fondo blanco de YouTube
+    Patron ganador en finanzas: clean background + big readable text + emotional hook
+    """
     W, H = 1280, 720
-    img = Image.new("RGB", (W, H), color=(5, 20, 5))
+    img = Image.new("RGB", (W, H), color=(8, 8, 8))
 
+    # Fondo: imagen IA muy oscurecida (85% oscuro) — el texto es el protagonista
     if imagen_ia_path and os.path.exists(imagen_ia_path):
         try:
             fondo = Image.open(imagen_ia_path).convert("RGB")
@@ -253,7 +263,8 @@ def generar_thumbnail(titulo: str, imagen_ia_path: str, salida: str = "thumbnail
             x = (nuevo_w - W) // 2
             y = (nuevo_h - H) // 2
             fondo = fondo.crop((x, y, x + W, y + H))
-            overlay = Image.new("RGBA", (W, H), (0, 0, 0, 150))
+            # Overlay muy oscuro para que el texto resalte
+            overlay = Image.new("RGBA", (W, H), (0, 0, 0, 200))
             fondo_rgba = fondo.convert("RGBA")
             img = Image.alpha_composite(fondo_rgba, overlay).convert("RGB")
         except Exception as e:
@@ -261,67 +272,72 @@ def generar_thumbnail(titulo: str, imagen_ia_path: str, salida: str = "thumbnail
 
     draw = ImageDraw.Draw(img)
 
-    # Degradado verde oscuro en la derecha para el texto
-    for x in range(W // 2, W):
-        alpha = int(180 * ((x - W // 2) / (W // 2)))
-        draw.line([(x, 0), (x, H)], fill=(0, int(30 * (1 - alpha/180)), 0))
-
-    # Borde dorado
-    draw.rectangle([(0, 0), (W-1, H-1)], outline=(255, 215, 0), width=6)
-
-    # Icono de dinero en la esquina superior izquierda
-    try:
-        font_emoji = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 60)
-    except Exception:
-        font_emoji = ImageFont.load_default()
-    try:
-        draw.text((20, 20), "💰", font=font_emoji, fill=(255, 215, 0))
-    except Exception:
-        draw.text((20, 20), "$", font=font_emoji, fill=(255, 215, 0))
-
-    # Texto: palabras clave del titulo
-    skip = {"the","a","an","in","on","at","of","and","or","but","is","was","to",
-            "for","that","this","with","are","were","how","why","what","your","you"}
-    palabras_titulo = titulo.replace("💰","").strip().split()
-    palabras_fuertes = [p for p in palabras_titulo if p.lower() not in skip]
-    texto_thumb = " ".join(palabras_fuertes[:3]).upper()
+    # Borde verde brillante (color del dinero)
+    draw.rectangle([(0, 0), (W-1, H-1)], outline=(0, 220, 80), width=8)
 
     try:
-        font_grande = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 100)
+        font_titulo = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 85
+        )
+        font_sub = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 48
+        )
+        font_badge = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 36
+        )
     except Exception:
-        font_grande = ImageFont.load_default()
+        font_titulo = ImageFont.load_default()
+        font_sub = font_titulo
+        font_badge = font_titulo
 
+    # Texto principal: titulo limpio sin hashtags ni emojis
+    texto_limpio = (
+        titulo
+        .replace("💰","").replace("📈","").replace("🤑","")
+        .replace("#Shorts","").replace("#Finance","").replace("#finance","")
+        .strip()
+    )
+
+    # Dividir en lineas de maximo 18 chars para que quepa en el thumbnail
+    palabras = texto_limpio.split()
     lineas = []
     linea_actual = ""
-    for palabra in texto_thumb.split():
-        if len(linea_actual + " " + palabra) <= 12:
+    for palabra in palabras:
+        if len(linea_actual + " " + palabra) <= 18:
             linea_actual += " " + palabra if linea_actual else palabra
         else:
             lineas.append(linea_actual)
             linea_actual = palabra
     if linea_actual:
         lineas.append(linea_actual)
-    lineas = lineas[:3]
+    lineas = lineas[:4]  # maximo 4 lineas
 
-    y_start = H // 2 - (len(lineas) * 115) // 2
-    for linea in lineas:
-        bbox = draw.textbbox((0, 0), linea, font=font_grande)
+    # Centrar verticalmente el bloque de texto
+    alto_bloque = len(lineas) * 100
+    y_start = (H - alto_bloque) // 2 - 20
+
+    for i, linea in enumerate(lineas):
+        # Color alternado: primera linea en dorado, resto en verde brillante
+        color_linea = (255, 215, 0) if i == 0 else (0, 255, 80)
+
+        bbox = draw.textbbox((0, 0), linea.upper(), font=font_titulo)
         w_texto = bbox[2] - bbox[0]
-        x_pos = W - w_texto - 50
-        for dx, dy in [(-4, -4), (4, 4), (-4, 4), (4, -4)]:
-            draw.text((x_pos + dx, y_start + dy), linea, font=font_grande, fill=(0, 0, 0))
-        draw.text((x_pos, y_start), linea, font=font_grande, fill=(255, 215, 0))
-        y_start += 120
+        x_pos = (W - w_texto) // 2  # centrado horizontal
 
-    # WealthSnap badge
-    try:
-        font_badge = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 35)
-    except Exception:
-        font_badge = ImageFont.load_default()
-    draw.rectangle([(15, H - 65), (230, H - 15)], fill=(0, 150, 0))
-    draw.text((25, H - 55), "WEALTHSNAP", font=font_badge, fill=(255, 255, 255))
+        # Sombra negra para legibilidad
+        for dx, dy in [(-3,-3),(3,3),(-3,3),(3,-3),(0,4),(4,0)]:
+            draw.text((x_pos+dx, y_start+dy), linea.upper(),
+                     font=font_titulo, fill=(0,0,0))
+        # Texto principal
+        draw.text((x_pos, y_start), linea.upper(),
+                 font=font_titulo, fill=color_linea)
+        y_start += 100
 
-    img.save(salida, "JPEG", quality=90, optimize=True)
+    # Badge WealthSnap en esquina inferior izquierda
+    draw.rectangle([(12, H-62), (270, H-12)], fill=(0, 180, 60))
+    draw.text((22, H-54), "💰 WEALTHSNAP", font=font_badge, fill=(255,255,255))
+
+    img.save(salida, "JPEG", quality=92, optimize=True)
     print(f"Thumbnail generado: {salida}")
     return salida
 
