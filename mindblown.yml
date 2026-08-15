@@ -1,0 +1,35 @@
+name: MindBlown - Shorts 3x al dia
+on:
+  schedule:
+    - cron: "0 11 * * *"
+    - cron: "0 16 * * *"
+    - cron: "0 21 * * *"
+  workflow_dispatch: {}
+jobs:
+  crear-mindblown:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Instalar ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Instalar ImageMagick
+        run: |
+          sudo apt-get install -y imagemagick
+          sudo sed -i 's/rights="none" pattern="@\*"/rights="read|write" pattern="@*"/' /etc/ImageMagick-6/policy.xml || true
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+      - name: Ejecutar pipeline MindBlown
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: python main_mindblown.py
