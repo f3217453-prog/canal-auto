@@ -1,8 +1,8 @@
 """
-Pipeline de AI Clipping
+Pipeline de AI Clipping (100% gratis, sin API de pago)
 ------------------------
 1. Transcribe el video con Whisper
-2. Le pide a Claude que marque los mejores momentos (JSON)
+2. Le pide a un modelo local (Ollama, gratis) que marque los mejores momentos
 3. Corta cada momento con ffmpeg, lo reencuadra a 9:16 y le quema subtítulos
 4. Sube cada clip a YouTube Shorts
 
@@ -13,65 +13,64 @@ import os
 import sys
 import json
 import subprocess
+import requests
 from pathlib import Path
 
 import whisper
-import anthropic
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 
-# ---------- CONFIG ----------
 VIDEO_PATH = sys.argv[1] if len(sys.argv) > 1 else "input/stream.mp4"
 CLIPS_DIR = Path("clips")
 CLIPS_DIR.mkdir(exist_ok=True)
 
-ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 YOUTUBE_CLIENT_ID = os.environ["YOUTUBE_CLIENT_ID"]
 YOUTUBE_CLIENT_SECRET = os.environ["YOUTUBE_CLIENT_SECRET"]
 YOUTUBE_CLIPS_REFRESH_TOKEN = os.environ["YOUTUBE_CLIPS_REFRESH_TOKEN"]
 
+OLLAMA_URL = "http://localhost:11434/api/generate"
+OLLAMA_MODEL = "llama3.2:1b"
 
-# ---------- 1. TRANSCRIBIR CON WHISPER ----------
+
 def transcribe(video_path: str):
     print("Transcribiendo con Whisper...")
-    # "base" es rápido; usa "small" o "medium" si quieres más precisión (más lento)
     model = whisper.load_model("base")
     result = model.transcribe(video_path, verbose=False)
-    return result["segments"]  # cada uno trae start, end, text
+    return result["segments"]
 
 
-# ---------- 2. DETECTAR MOMENTOS VIRALES CON CLAUDE ----------
 def find_viral_moments(segments):
-    print("Pidiendo a Claude que marque los mejores momentos...")
+    print("Pidiendo al modelo local que marque los mejores momentos...")
     transcript_text = "\n".join(
         f"[{s['start']:.1f}-{s['end']:.1f}] {s['text'].strip()}" for s in segments
     )
 
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    prompt = f"""Aquí está la transcripción de un stream con timestamps en segundos.
+    prompt = f"""Aqui esta la transcripcion de un stream con timestamps en segundos.
 
 {transcript_text}
 
-Marca los 5 a 8 momentos con mayor potencial viral para clips cortos (gracioso, sorprendente, polémico, emotivo).
+Marca los 5 a 8 momentos con mayor potencial viral para clips cortos (gracioso, sorprendente, polemico, emotivo).
 Cada clip debe durar entre 20 y 60 segundos.
-Responde SOLO con JSON válido, sin texto adicional ni backticks, con este formato exacto:
+Responde SOLO con JSON valido, sin texto adicional ni backticks, con este formato exacto:
 [
-  {{"start": 123.4, "end": 145.0, "title": "Título llamativo para el short", "reason": "por qué es viral"}}
+  {{"start": 123.4, "end": 145.0, "title": "Titulo llamativo para el short", "reason": "por que es viral"}}
 ]
 """
 
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=2000,
-        messages=[{"role": "user", "content": prompt}],
+    response = requests.post(
+        OLLAMA_URL,
+        json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
+        timeout=600,
     )
-
-    raw = response.content[0].text.strip()
+    response.raise_for_status()
+    raw = response.json()["response"].strip()
     raw = raw.replace("```json", "").replace("```", "").strip()
-    return json.loads(raw)
+
+    start = raw.find("[")
+    end = raw.rfind("]") + 1
+    return json.loads(raw[start:end])
 
 
-# ---------- 3. GENERAR SUBTÍTULOS .SRT PARA EL SEGMENTO ----------
 def write_srt(segments, start, end, out_path: Path):
     def fmt(t):
         h, rem = divmod(max(t, 0), 3600)
@@ -95,7 +94,6 @@ def write_srt(segments, start, end, out_path: Path):
     out_path.write_text("\n".join(lines), encoding="utf-8")
 
 
-# ---------- 4. CORTAR Y FORMATEAR CADA CLIP ----------
 def cut_clip(video_path: str, start: float, end: float, srt_path: Path, out_path: Path):
     duration = end - start
     cmd = [
@@ -111,7 +109,6 @@ def cut_clip(video_path: str, start: float, end: float, srt_path: Path, out_path
     subprocess.run(cmd, check=True)
 
 
-# ---------- 5. SUBIR A YOUTUBE ----------
 def upload_to_youtube(file_path: Path, title: str, description: str):
     creds = Credentials(
         None,
@@ -126,7 +123,7 @@ def upload_to_youtube(file_path: Path, title: str, description: str):
         "snippet": {
             "title": title[:100],
             "description": description,
-            "categoryId": "24",  # Entertainment
+            "categoryId": "24",
         },
         "status": {"privacyStatus": "public", "selfDeclaredMadeForKids": False},
     }
@@ -140,11 +137,10 @@ def upload_to_youtube(file_path: Path, title: str, description: str):
     print(f"Subido: https://youtube.com/shorts/{response['id']}")
 
 
-# ---------- MAIN ----------
 def main():
     segments = transcribe(VIDEO_PATH)
     moments = find_viral_moments(segments)
-    print(f"Claude encontró {len(moments)} momentos virales")
+    print(f"El modelo encontro {len(moments)} momentos virales")
 
     for i, m in enumerate(moments):
         clip_path = CLIPS_DIR / f"clip_{i}.mp4"
