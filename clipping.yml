@@ -27,8 +27,6 @@ jobs:
       - name: Instalar Ollama (IA local gratis)
         run: |
           curl -fsSL https://ollama.com/install.sh | sh
-          ollama serve &
-          sleep 5
           ollama pull llama3.2:1b
 
       - name: Descargar el video fuente
@@ -39,4 +37,13 @@ jobs:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_CLIPS_REFRESH_TOKEN: ${{ secrets.YOUTUBE_CLIPS_REFRESH_TOKEN }}
-        run: python main.py input/stream.mp4
+        run: |
+          nohup ollama serve > ollama.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:11434 > /dev/null; then
+              echo "Ollama listo"
+              break
+            fi
+            sleep 2
+          done
+          python main.py input/stream.mp4
