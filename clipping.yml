@@ -24,9 +24,17 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
-      - name: Instalar Ollama (IA local gratis)
+      - name: Instalar Ollama y descargar modelo (IA local gratis)
         run: |
           curl -fsSL https://ollama.com/install.sh | sh
+          nohup ollama serve > ollama.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:11434 > /dev/null; then
+              echo "Ollama listo"
+              break
+            fi
+            sleep 2
+          done
           ollama pull llama3.2:1b
 
       - name: Descargar el video fuente
@@ -38,7 +46,7 @@ jobs:
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_CLIPS_REFRESH_TOKEN: ${{ secrets.YOUTUBE_CLIPS_REFRESH_TOKEN }}
         run: |
-          nohup ollama serve > ollama.log 2>&1 &
+          nohup ollama serve > ollama2.log 2>&1 &
           for i in $(seq 1 30); do
             if curl -s http://localhost:11434 > /dev/null; then
               echo "Ollama listo"
