@@ -5,3 +5,4 @@ google-auth-oauthlib
 yt-dlp
 requests
 edge-tts
+Pillow
