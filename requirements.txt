@@ -6,3 +6,5 @@ yt-dlp
 requests
 edge-tts
 Pillow
+moviepy
+numpy
