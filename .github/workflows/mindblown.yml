@@ -5,6 +5,8 @@ on:
     - cron: "0 16 * * *"
     - cron: "0 21 * * *"
   workflow_dispatch: {}
+permissions:
+  contents: write
 jobs:
   crear-mindblown:
     runs-on: ubuntu-latest
@@ -32,4 +34,5 @@ jobs:
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python main_mindblown.py
