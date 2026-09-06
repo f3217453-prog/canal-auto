@@ -1,20 +1,9 @@
 """
-MindBlown - Pipeline Top 10 Viral Moments - Version 1.1
+MindBlown - Pipeline Top 10 Viral Moments - Version 1.2
 
-Top 10 de datos increibles, comparaciones sorprendentes, records,
-fenomenos naturales, animales, etc.
+Top 10 de datos, records y comparaciones extremas.
 Todo con material libre de derechos de Pexels.
 Sin copyright, alta viralidad, formato entretenido.
-
-Referencia: Daily Dose of Internet (20M subs, $140K-$400K/mes)
-
-CAMBIOS v1.1:
-- Prompt reenfocado de "momentos captados en camara" a "datos e
-  informacion verificable" para que el video de stock no choque con
-  lo que promete el hook (evita rechazo/reportes de clickbait).
-- Nueva categoria de comparaciones/contraste (X vs Y).
-- Cierre de "reto al espectador" en todos los guiones para subir
-  comentarios y shares.
 """
 import os
 import io
@@ -24,6 +13,7 @@ import random
 import requests
 import asyncio
 import json
+import base64
 import edge_tts
 import whisper
 from PIL import Image, ImageDraw, ImageFont
@@ -47,12 +37,14 @@ RESOLUCION = (1080, 1920)
 HF_MODEL = "stabilityai/stable-diffusion-xl-base-1.0"
 MODELOS_GEMINI = ["gemini-3.5-flash", "gemini-3.1-flash-lite"]
 
+DURACION_HOOK = 1.8
+CLIP_MIN, CLIP_MAX = 1.2, 2.5
+
 NEGATIVE_PROMPT = (
     "deformed hands, extra fingers, mutated, blurry, watermark, text, "
     "logo, disfigured face, low quality, low resolution, duplicate"
 )
 
-# Voces variadas - energeticas y entusiastas para contenido viral
 VOCES = [
     "en-US-AndrewNeural",
     "en-US-GuyNeural",
@@ -71,20 +63,17 @@ MUSICA = [
     "https://cdn.pixabay.com/download/audio/2021/08/09/audio_99bbbd8a4c.mp3",
 ]
 
-# Categorias que alternan para dar variedad al canal.
-# Reenfocadas hacia informacion/datos verificables (no "esto paso en
-# camara") para que el material de stock de Pexels nunca contradiga
-# lo que promete el hook.
 CATEGORIAS = {
     "mind_blowing_facts": {
+        "peso": 3,
         "temas": [
-            "facts about Earth that will make you see the planet differently",
-            "space facts so extreme they are almost impossible to believe",
-            "things about the ocean that will terrify and amaze you",
+            "facts about Earth that sound fake but are true",
+            "space facts so extreme they sound fake but are true",
+            "facts about the ocean that sound fake but are true",
             "history facts so wild they sound like fiction",
-            "science discoveries that changed everything we knew",
-            "facts about the human body that will blow your mind",
-            "things about time and the universe that break your brain",
+            "science facts that sound fake but are 100% true",
+            "facts about the human body that sound fake but are true",
+            "facts about time and the universe that break your brain",
         ],
         "consultas_broll": [
             "space galaxy stars universe", "deep ocean underwater",
@@ -97,32 +86,16 @@ CATEGORIAS = {
         "color_sub": "#9B59B6",
         "emoji_titulo": "😱",
     },
-    "natural_phenomena": {
+    "animal_superpowers": {
+        "peso": 3,
         "temas": [
-            "natural phenomena so extreme scientists still study them",
-            "the most powerful natural forces on planet Earth",
-            "rare weather events that happen once in a lifetime",
-            "geological wonders that took millions of years to form",
-            "natural events so massive they can be seen from space",
-            "the most extreme places that actually exist on Earth",
-        ],
-        "consultas_broll": [
-            "extreme weather lightning storm", "tornado funnel cloud dramatic",
-            "volcanic eruption lava", "aurora borealis night sky",
-            "giant wave ocean storm", "meteor shower night sky",
-            "ice storm frozen tree", "desert sand storm",
-            "waterspout ocean tornado", "hailstorm dramatic",
-        ],
-        "color_sub": "#00BFFF",
-        "emoji_titulo": "🌪️",
-    },
-    "animal_facts": {
-        "temas": [
-            "animal abilities that sound like actual superpowers",
-            "the most surprising things science discovered about animals",
-            "the rarest animals that actually exist on Earth",
-            "animal survival tricks evolution took millions of years to build",
-            "the most intelligent animal behaviors ever studied",
+            "animal facts that sound fake but are true",
+            "animal abilities that sound made up but are real",
+            "the rarest animals on Earth and why they exist",
+            "animal survival abilities that sound fake but are true",
+            "the most intelligent animals and what they can really do",
+            "animal senses that sound impossible but are real",
+            "animals with real abilities that seem like superpowers",
         ],
         "consultas_broll": [
             "eagle hunting prey slow motion", "whale breaching ocean",
@@ -136,12 +109,15 @@ CATEGORIAS = {
         "emoji_titulo": "🦁",
     },
     "human_achievements": {
+        "peso": 3,
         "temas": [
-            "the most insane world records ever broken",
-            "things humans built that seem physically impossible",
-            "engineering achievements that changed the world forever",
-            "the most extreme sports records ever set",
-            "human body records that push the limits of biology",
+            "man-made structures that defy logic",
+            "structures that seem physically impossible but exist",
+            "world records that sound fake but are true",
+            "engineering achievements that defy logic",
+            "the most extreme structures humans have ever built",
+            "human achievements that sound fake but are true",
+            "records that seem impossible but were actually broken",
         ],
         "consultas_broll": [
             "extreme sports athlete", "skydiving aerial view",
@@ -154,25 +130,43 @@ CATEGORIAS = {
         "color_sub": "#FFD700",
         "emoji_titulo": "🏆",
     },
-    "extreme_comparisons": {
+    "natural_phenomena": {
+        "peso": 1,
         "temas": [
-            "the fastest vs the slowest animals on Earth compared",
-            "the richest vs the poorest countries and what separates them",
-            "the biggest vs the smallest structures humans ever built",
-            "the hottest vs the coldest places humans actually live",
-            "the deepest vs the highest points on planet Earth",
-            "ancient technology vs modern technology and the gap between them",
+            "natural phenomena that sound fake but are real",
+            "extreme weather events that sound fake but are true",
+            "places on Earth that sound fake but are real",
+            "natural events so rare they sound made up",
         ],
         "consultas_broll": [
-            "cheetah running fast", "desert aerial drone",
-            "city skyline aerial night", "rural village aerial",
-            "mountain peak snow aerial", "ocean trench deep blue",
-            "skyscraper aerial view", "ancient architecture ruins",
-            "modern technology factory", "arctic ice landscape",
-            "tropical landscape aerial", "urban aerial drone",
+            "extreme weather lightning storm", "tornado funnel cloud dramatic",
+            "volcanic eruption lava", "aurora borealis night sky",
+            "giant wave ocean storm", "earthquake destruction dramatic",
+            "meteor shower night sky", "flood river overflow",
+            "ice storm frozen tree", "desert sand storm",
+            "waterspout ocean tornado", "hailstorm dramatic",
+        ],
+        "color_sub": "#00BFFF",
+        "emoji_titulo": "🤯",
+    },
+    "extreme_comparisons": {
+        "peso": 1,
+        "temas": [
+            "extreme comparisons that sound fake but are true",
+            "the richest vs the poorest places on Earth",
+            "the fastest vs the slowest things in nature",
+            "extremes in the animal kingdom that sound made up",
+        ],
+        "consultas_broll": [
+            "desert extreme heat", "arctic ice landscape",
+            "skyscraper city aerial", "rural village aerial",
+            "cheetah running fast", "sloth slow motion",
+            "whale ocean giant", "hummingbird tiny fast",
+            "ancient ruins historical", "modern city futuristic",
+            "volcano aerial dramatic", "glacier ice melting",
         ],
         "color_sub": "#FF4444",
-        "emoji_titulo": "⚖️",
+        "emoji_titulo": "🔥",
     },
 }
 
@@ -182,61 +176,68 @@ CONSULTAS_RESPALDO = [
 ]
 
 PROMPT_SISTEMA = """You are a viral YouTube Shorts narrator for MindBlown channel.
-You create top 10 countdowns about mind-blowing, real, verifiable facts and comparisons.
-Your style is like Daily Dose of Internet — calm but enthusiastic, with genuine amazement.
-Reference channel: 20 million subscribers. Formula: simple narration + incredible visuals.
+You create top 10 countdowns about mind-blowing facts, extreme records, and incredible comparisons.
+Your proven winning formula is the "sounds fake but is true" / "defies logic" angle —
+this style has consistently gotten the most views on this channel.
+Your style is like a fast-paced trivia narrator — calm but enthusiastic, with genuine amazement.
 
 Create a top 10 countdown about: {tema}
 
-CRITICAL RULE: Every entry must be a real, verifiable FACT or COMPARISON —
-never claim something was "caught on camera" or "filmed" or "happened".
-Frame everything as information/knowledge, not as a captured moment.
-Good: "This animal can survive being frozen solid." 
-Bad: "Watch what this animal did on camera."
-
 HOOK RULES (most critical — determines 70-90% of views):
 - Under 8 words
-- Must use ONE of these proven viral patterns:
-  * DISBELIEF: "This fact sounds fake but it's real."
-  * SHOCK: "Number 1 on this list will change how you think."
-  * CURIOSITY: "Scientists still cannot fully explain number 3."
-  * CHALLENGE: "Bet you don't know number 1 on this list."
+- STRONGLY prefer the "sounds fake" / "defies logic" pattern, since it is proven to work best:
+  * "This sounds fake but it's 100% real."
+  * "Number 1 defies actual logic."
+  * "You won't believe number 3 is real."
+  * "This fact broke scientists' brains."
 - Must stop someone mid-scroll instantly
 
 COUNTDOWN RULES:
 - Start with hook IMMEDIATELY — no intro, no filler
 - Number from 10 down to 1
-- Each entry: 1-2 punchy sentences with ONE specific verifiable fact or number
+- Each entry: 1-2 punchy sentences with ONE specific, verifiable, mind-blowing detail
 - Build amazement progressively — each entry more incredible than the last
 - At #5: "but what's coming at number 1 will genuinely shock you..."
-- #1: the most jaw-dropping, unbelievable fact — must deliver on the hype
-- End with a direct challenge to the viewer, asking which fact they
-  already knew or which one surprised them most — this drives comments
+- #1: the most jaw-dropping, unbelievable entry — must deliver on the hype
 - Keep it PG — no violence, no gore, family-friendly amazement
+- END the script with a short direct challenge to the viewer, for example:
+  "Comment which number surprised you the most." or
+  "Bet you only knew 2 of these — tell me which ones."
+  This closing line is separate from the count of 10-to-1 entries and should
+  feel natural, not forced.
+- Never claim "caught on camera" or "recorded live" — frame everything as
+  facts, records, and things that exist or are true, not footage of an event.
 
 TITLE RULES:
 - Under 40 characters (mobile truncates longer)
-- Must create immediate curiosity or promise something unbelievable
-- Examples: "Top 10 Facts That Sound Fake" / "Top 10 Things Science Can't Explain"
+- STRONGLY prefer titles using "Sound(s) Fake" or "Defies Logic" or "Sounds Made Up" —
+  this exact pattern is proven to outperform everything else on this channel
+- Examples: "10 Facts That Sound Fake 😱" / "10 Structures That Defy Logic 🏆"
 - Add {emoji} and #Shorts at end
 
-3 filmable scene descriptions for Pexels search (nature, sports, animals, phenomena,
-landscapes — never people performing a specific filmed "moment")
+3 filmable scene descriptions for Pexels search (nature, science, animals, structures — generic and illustrative)
 
-STRICT: 100-120 words ENGLISH ONLY. Every word earns its place.
+Also provide a short "miniatura" line: 3-5 words in ALL CAPS summarizing the single
+most shocking fact from the whole list (used as bold text on the video thumbnail,
+separate from the hook and title).
+
+STRICT: 100-130 words ENGLISH ONLY (100-120 for the countdown + short challenge closer). Every word earns its place.
 
 Return ONLY valid JSON, no markdown, no backticks:
 {{
 "hook": "...(under 8 words, stops scroll instantly)...",
-"guion": "...(100-120 words STRICT, countdown 10 to 1, ends with a challenge to comment)...",
+"guion": "...(100-120 words STRICT countdown 10 to 1, plus a short viewer-challenge closing line)...",
 "escenas": ["pexels search phrase 1", "pexels search phrase 2", "pexels search phrase 3"],
 "titulo": "...(under 40 chars + {emoji} + #Shorts)...",
-"tags": ["mindblown", "top10", "viral", "shorts", "facts", "didyouknow", "incredible", "science", "amazing", "wow"]
+"miniatura": "...(3-5 words ALL CAPS, the single most shocking fact)...",
+"tags": ["mindblown", "top10", "viral", "shorts", "facts", "soundsfake", "science", "wow", "trivia", "mindblowing"]
 }}"""
 
 
 def generar_contenido() -> tuple:
-    categoria_key = random.choice(list(CATEGORIAS.keys()))
+    claves = list(CATEGORIAS.keys())
+    pesos = [CATEGORIAS[k]["peso"] for k in claves]
+    categoria_key = random.choices(claves, weights=pesos, k=1)[0]
     categoria = CATEGORIAS[categoria_key]
     tema = random.choice(categoria["temas"])
     emoji = categoria["emoji_titulo"]
@@ -307,6 +308,58 @@ def generar_imagenes(escenas: list, categoria: dict) -> list:
             f"{escena}, cinematic dramatic", i
         ))
     ]
+
+
+def generar_miniatura(imagen_base: str, texto: str, color_sub: str,
+                       destino: str = "miniatura_mindblown.jpg") -> str:
+    try:
+        img = Image.open(imagen_base).convert("RGB")
+        img = img.resize((720, 1280))
+        lienzo = Image.new("RGB", (1280, 720), (0, 0, 0))
+        x_offset = (1280 - 720) // 2
+        lienzo.paste(img, (x_offset, 0))
+
+        overlay = Image.new("RGBA", lienzo.size, (0, 0, 0, 110))
+        lienzo = Image.alpha_composite(lienzo.convert("RGBA"), overlay).convert("RGB")
+
+        draw = ImageDraw.Draw(lienzo)
+        try:
+            fuente = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 80
+            )
+        except Exception:
+            fuente = ImageFont.load_default()
+
+        texto = texto.upper()
+        palabras = texto.split()
+        lineas, linea_actual = [], ""
+        for palabra in palabras:
+            prueba = f"{linea_actual} {palabra}".strip()
+            bbox = draw.textbbox((0, 0), prueba, font=fuente)
+            if bbox[2] - bbox[0] > 1100 and linea_actual:
+                lineas.append(linea_actual)
+                linea_actual = palabra
+            else:
+                linea_actual = prueba
+        if linea_actual:
+            lineas.append(linea_actual)
+
+        alto_total = len(lineas) * 95
+        y = (720 - alto_total) // 2
+        for linea in lineas:
+            bbox = draw.textbbox((0, 0), linea, font=fuente)
+            ancho = bbox[2] - bbox[0]
+            x = (1280 - ancho) // 2
+            for dx, dy in [(-3,-3),(-3,3),(3,-3),(3,3),(0,0)]:
+                color = color_sub if (dx, dy) == (0, 0) else "black"
+                draw.text((x+dx, y+dy), linea, font=fuente, fill=color)
+            y += 95
+
+        lienzo.save(destino, quality=92)
+        return destino
+    except Exception as e:
+        print(f"Aviso miniatura: {e}")
+        return None
 
 
 def descargar_musica() -> str:
@@ -406,7 +459,7 @@ def _preparar_clip(ruta, dur_max):
     c = c.resize(escala)
     c = c.crop(x_center=c.w/2, y_center=c.h/2,
                width=RESOLUCION[0], height=RESOLUCION[1])
-    dur_clip = min(c.duration, dur_max, random.uniform(2.0, 4.0))
+    dur_clip = min(c.duration, dur_max, random.uniform(CLIP_MIN, CLIP_MAX))
     if dur_clip <= 0:
         c.close()
         return None
@@ -436,7 +489,7 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
                  salida="video_mindblown.mp4"):
     audio_voz = AudioFileClip(audio_path)
     duracion_total = audio_voz.duration
-    duracion_video = duracion_total + 2.5  # 2.5s de hook visual al inicio
+    duracion_video = duracion_total + DURACION_HOOK
     color_sub = categoria["color_sub"]
 
     n_escenas = max(len(clips_por_escena), 1)
@@ -492,8 +545,7 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
     video_base = concatenate_videoclips(clips_finales, method="compose")
     video_base = video_base.set_duration(duracion_video)
 
-    # Narracion empieza a los 2.5s, despues del hook visual
-    audio_voz_delayed = audio_voz.set_start(2.5)
+    audio_voz_delayed = audio_voz.set_start(DURACION_HOOK)
     audios = [audio_voz_delayed]
     if musica_path:
         try:
@@ -511,13 +563,12 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
 
     subtitulos = []
 
-    # Hook visual: texto grande centrado sobre overlay oscuro (primeros 2.5s)
     import numpy as np
     overlay = (
         ImageClip(np.zeros((RESOLUCION[1], RESOLUCION[0], 3), dtype=np.uint8))
-        .set_opacity(0.6)
+        .set_opacity(0.55)
         .set_start(0)
-        .set_end(2.5)
+        .set_end(DURACION_HOOK)
     )
 
     hook_clip = TextClip(
@@ -525,22 +576,20 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
         fontsize=78, color="white", font="DejaVu-Sans-Bold",
         stroke_color=color_sub, stroke_width=4,
         size=(RESOLUCION[0]-80, None), method="caption"
-    ).set_start(0).set_end(2.5).set_position("center")
+    ).set_start(0).set_end(DURACION_HOOK).set_position("center")
     subtitulos.append(hook_clip)
 
-    # Badge MindBlown en el hook
     badge = TextClip(
         "🔥 MINDBLOWN", fontsize=45, color=color_sub,
         font="DejaVu-Sans-Bold", stroke_color="black", stroke_width=2,
-    ).set_start(0).set_end(2.5).set_position(("center", 0.22), relative=True)
+    ).set_start(0).set_end(DURACION_HOOK).set_position(("center", 0.22), relative=True)
     subtitulos.append(badge)
 
-    # Subtitulos palabra por palabra desde los 2.5s
     PALABRAS_CLAVE = {
         "impossible", "never", "ever", "first", "only", "record",
         "insane", "incredible", "unbelievable", "shocking", "mind-blowing",
         "fastest", "biggest", "smallest", "rarest", "deadliest",
-        "discovered", "proven", "real", "fact", "facts",
+        "survived", "discovered", "comment", "fake", "logic",
     }
 
     for seg in segmentos:
@@ -549,7 +598,7 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
             continue
         dur_palabra = (seg["end"] - seg["start"]) / max(len(palabras), 1)
         for j, palabra in enumerate(palabras):
-            t_inicio = seg["start"] + 2.5 + j * dur_palabra
+            t_inicio = seg["start"] + DURACION_HOOK + j * dur_palabra
             t_fin = t_inicio + dur_palabra
 
             es_numero = any(n in palabra for n in
@@ -571,6 +620,18 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
                 ("center", 0.72), relative=True
             ))
 
+    dur_cta = min(3.0, duracion_video)
+    t_inicio_cta = duracion_video - dur_cta
+    cta_clip = TextClip(
+        "SUSCRÍBETE PARA MÁS 🔔",
+        fontsize=70, color="white", font="DejaVu-Sans-Bold",
+        stroke_color=color_sub, stroke_width=4,
+        size=(RESOLUCION[0]-100, None), method="caption"
+    ).set_start(t_inicio_cta).set_end(duracion_video).set_position(
+        ("center", 0.15), relative=True
+    )
+    subtitulos.append(cta_clip)
+
     final = CompositeVideoClip(
         [video_base, overlay, *subtitulos]
     ).set_duration(duracion_video)
@@ -582,7 +643,44 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
     return salida
 
 
-def subir_youtube(video_path, titulo, descripcion, tags):
+def leer_contador() -> int:
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    token = os.environ.get("GH_TOKEN", "")
+    if not repo or not token:
+        return 1
+    try:
+        r = requests.get(
+            f"https://api.github.com/repos/{repo}/contents/contador.txt",
+            headers={"Authorization": f"token {token}"}, timeout=15
+        )
+        if r.status_code == 200:
+            contenido = base64.b64decode(r.json()["content"]).decode().strip()
+            return int(contenido)
+    except Exception as e:
+        print(f"Aviso contador (lectura): {e}")
+    return 1
+
+
+def actualizar_contador(numero: int):
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    token = os.environ.get("GH_TOKEN", "")
+    if not repo or not token:
+        return
+    try:
+        url = f"https://api.github.com/repos/{repo}/contents/contador.txt"
+        headers = {"Authorization": f"token {token}"}
+        r = requests.get(url, headers=headers, timeout=15)
+        sha = r.json().get("sha") if r.status_code == 200 else None
+        contenido_b64 = base64.b64encode(str(numero).encode()).decode()
+        body = {"message": f"Actualizar contador a {numero}", "content": contenido_b64}
+        if sha:
+            body["sha"] = sha
+        requests.put(url, headers=headers, json=body, timeout=15)
+    except Exception as e:
+        print(f"Aviso contador (escritura): {e}")
+
+
+def subir_youtube(video_path, titulo, descripcion, tags, miniatura_path=None):
     creds = Credentials(
         token=None, refresh_token=YOUTUBE_REFRESH_TOKEN,
         client_id=YOUTUBE_CLIENT_ID, client_secret=YOUTUBE_CLIENT_SECRET,
@@ -596,17 +694,34 @@ def subir_youtube(video_path, titulo, descripcion, tags):
                 "title": titulo[:100],
                 "description": descripcion[:5000],
                 "tags": tags,
-                "categoryId": "24",  # Entertainment
+                "categoryId": "24",
             },
             "status": {"privacyStatus": "public"},
         },
         media_body=MediaFileUpload(video_path, chunksize=-1, resumable=True)
     )
-    print("Subido:", request.execute().get("id"))
+    respuesta = request.execute()
+    video_id = respuesta.get("id")
+    print("Subido:", video_id)
+
+    if miniatura_path and video_id:
+        try:
+            youtube.thumbnails().set(
+                videoId=video_id,
+                media_body=MediaFileUpload(miniatura_path)
+            ).execute()
+            print("Miniatura personalizada aplicada")
+        except Exception as e:
+            print(f"Aviso miniatura (no se pudo subir): {e}")
+
+    return video_id
 
 
 def main():
     print("MindBlown - Pipeline Top 10 Viral Moments")
+    episodio = leer_contador()
+    print(f"Episodio numero: {episodio}")
+
     contenido, categoria = generar_contenido()
     escenas = contenido.get("escenas", [])
     imagenes_ia = generar_imagenes(escenas, categoria)
@@ -614,29 +729,40 @@ def main():
     musica_path = descargar_musica()
     audio_path = generar_audio(contenido["guion"])
     segmentos = transcribir(audio_path)
-    hook_texto = contenido.get("hook", "This fact sounds fake but it's real.")
+    hook_texto = contenido.get("hook", "This sounds fake but it's real.")
 
     video_path = armar_video(
         clips_por_escena, pool_generico, imagenes_ia,
         audio_path, segmentos, hook_texto, musica_path, categoria
     )
 
-    titulo = contenido.get("titulo", "Top 10 Facts That Sound Fake 🤯 #Shorts")
+    miniatura_path = None
+    texto_miniatura = contenido.get("miniatura", "")
+    if texto_miniatura and imagenes_ia:
+        miniatura_path = generar_miniatura(
+            imagenes_ia[0], texto_miniatura, categoria["color_sub"]
+        )
+
+    titulo_base = contenido.get("titulo", "10 Facts That Sound Fake 😱 #Shorts")
+    titulo = f"#{episodio} {titulo_base}"[:100]
+
     HASHTAGS = ["#shorts", "#top10", "#viral", "#mindblown", "#facts",
-                "#didyouknow", "#incredible", "#science", "#amazing", "#wow"]
+                "#soundsfake", "#incredible", "#science", "#amazing", "#wow"]
     tags = list(dict.fromkeys(
         contenido.get("tags", []) + [
             "mindblown", "top10", "viral", "shorts", "facts",
-            "didyouknow", "incredible", "science", "amazing",
+            "soundsfake", "incredible", "science", "amazing",
             "wow", "satisfying", "nature", "records", "comparison",
         ]
     ))
     descripcion = (
+        f"MindBlown #{episodio}\n\n"
         f"{contenido['guion']}\n\n"
         f"🔥 Subscribe to MindBlown for daily mind-blowing facts.\n\n"
         f"{' '.join(HASHTAGS)}"
     )
-    subir_youtube(video_path, titulo, descripcion, tags)
+    subir_youtube(video_path, titulo, descripcion, tags, miniatura_path)
+    actualizar_contador(episodio + 1)
 
 
 if __name__ == "__main__":
