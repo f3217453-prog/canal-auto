@@ -627,32 +627,53 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
         "survived", "discovered", "comment", "fake", "logic",
     }
 
+    # Subtitulos en GRUPOS de 2-3 palabras (no palabra suelta): si YouTube
+    # captura un fotograma al azar como miniatura de vista previa (pasa en la
+    # cuadricula de Shorts del canal), que se vea una frase con sentido y no
+    # una sola palabra suelta y confusa tipo "DON'T" o "SALTWATER".
+    TAMANO_GRUPO = 3
+
     for seg in segmentos:
         palabras = seg["text"].strip().split()
         if not palabras:
             continue
-        dur_palabra = (seg["end"] - seg["start"]) / max(len(palabras), 1)
-        for j, palabra in enumerate(palabras):
-            t_inicio = seg["start"] + DURACION_HOOK + j * dur_palabra
-            t_fin = t_inicio + dur_palabra
+        dur_total_seg = seg["end"] - seg["start"]
+        dur_palabra = dur_total_seg / max(len(palabras), 1)
 
-            es_numero = any(n in palabra for n in
-                           ["10","9","8","7","6","5","4","3","2","1"])
-            es_clave = palabra.lower().strip(".,!?") in PALABRAS_CLAVE
-            color = "#FFD700" if es_numero else (color_sub if es_clave else "white")
-            tam = 95 if es_clave or es_numero else 88
+        grupos = [
+            palabras[i:i + TAMANO_GRUPO]
+            for i in range(0, len(palabras), TAMANO_GRUPO)
+        ]
+        j = 0
+        for grupo in grupos:
+            t_inicio = seg["start"] + DURACION_HOOK + j * dur_palabra
+            t_fin = t_inicio + dur_palabra * len(grupo)
+            j += len(grupo)
+
+            texto_grupo = " ".join(grupo)
+            contiene_numero = any(
+                any(n in p for n in ["10","9","8","7","6","5","4","3","2","1"])
+                for p in grupo
+            )
+            contiene_clave = any(
+                p.lower().strip(".,!?") in PALABRAS_CLAVE for p in grupo
+            )
+            color = "#FFD700" if contiene_numero else (color_sub if contiene_clave else "white")
+            tam = 72 if len(grupo) > 1 else 88
 
             subtitulos.append(TextClip(
-                palabra.upper(), fontsize=tam, color="black",
+                texto_grupo.upper(), fontsize=tam, color="black",
                 font="DejaVu-Sans-Bold", stroke_color="black", stroke_width=4,
+                size=(RESOLUCION[0]-100, None), method="caption"
             ).set_start(t_inicio).set_end(t_fin).set_position(
-                (RESOLUCION[0]//2 - 3, int(RESOLUCION[1] * 0.72) + 3), True
+                (RESOLUCION[0]//2 - 3 - (RESOLUCION[0]-100)//2, int(RESOLUCION[1] * 0.70) + 3)
             ))
             subtitulos.append(TextClip(
-                palabra.upper(), fontsize=tam, color=color,
+                texto_grupo.upper(), fontsize=tam, color=color,
                 font="DejaVu-Sans-Bold", stroke_color="black", stroke_width=2,
+                size=(RESOLUCION[0]-100, None), method="caption"
             ).set_start(t_inicio).set_end(t_fin).set_position(
-                ("center", 0.72), relative=True
+                ("center", 0.70), relative=True
             ))
 
     dur_cta = min(3.0, duracion_video)
