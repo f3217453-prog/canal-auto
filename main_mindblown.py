@@ -290,7 +290,10 @@ def generar_contenido() -> tuple:
     )
     body = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.95, "maxOutputTokens": 1500}
+        # Subido de 1500 a 2500: el prompt actual es mas largo (formato variable,
+        # miniatura, etc.) y con 1500 el JSON de salida se podia cortar a la mitad
+        # y quedar invalido, causando fallos silenciosos sin razon visible.
+        "generationConfig": {"temperature": 0.95, "maxOutputTokens": 2500}
     }
     for modelo in MODELOS_GEMINI:
         for intento in range(3):
@@ -300,19 +303,33 @@ def generar_contenido() -> tuple:
                     f"{modelo}:generateContent?key={GEMINI_API_KEY}"
                 )
                 r = requests.post(url, json=body, timeout=60)
+                print(f"[{modelo} intento {intento+1}] HTTP {r.status_code}", flush=True)
                 if r.status_code in (503, 429):
+                    print(f"[{modelo} intento {intento+1}] Rate limit / sobrecarga, esperando...", flush=True)
                     time.sleep(15)
                     continue
+                if r.status_code != 200:
+                    print(f"[{modelo} intento {intento+1}] Respuesta de error: {r.text[:500]}", flush=True)
                 r.raise_for_status()
                 data = r.json()
+                if "candidates" not in data or not data["candidates"]:
+                    motivo = data.get("promptFeedback", data)
+                    print(f"[{modelo} intento {intento+1}] Sin candidates. Detalle: {str(motivo)[:500]}", flush=True)
+                    time.sleep(5)
+                    continue
                 texto = data["candidates"][0]["content"]["parts"][0]["text"].strip()
                 texto = re.sub(r"```json|```", "", texto).strip()
-                contenido = json.loads(texto)
-                print(f"Categoria: {categoria_key} | Tema: {tema}")
-                print(f"Hook: {contenido.get('hook', '')}")
+                try:
+                    contenido = json.loads(texto)
+                except json.JSONDecodeError as je:
+                    print(f"[{modelo} intento {intento+1}] JSON invalido ({je}). Texto crudo (primeros 500 chars): {texto[:500]}", flush=True)
+                    time.sleep(5)
+                    continue
+                print(f"Categoria: {categoria_key} | Tema: {tema}", flush=True)
+                print(f"Hook: {contenido.get('hook', '')}", flush=True)
                 return contenido, categoria
             except Exception as e:
-                print(f"Error {modelo} intento {intento+1}: {e}")
+                print(f"[{modelo} intento {intento+1}] Excepcion: {type(e).__name__}: {e}", flush=True)
                 time.sleep(5)
     raise RuntimeError("Todos los modelos fallaron")
 
