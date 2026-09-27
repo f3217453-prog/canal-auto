@@ -531,7 +531,22 @@ def _preparar_clip(ruta, dur_max):
     if dur_clip <= 0:
         c.close()
         return None
-    return c.subclip(0, dur_clip)
+    c = c.subclip(0, dur_clip)
+
+    # Efecto Ken Burns: zoom lento y continuo (in o out, al azar) para que el
+    # clip se sienta mas dinamico/producido en vez de una imagen estatica.
+    # El zoom es sutil (hasta 12%) para no verse forzado ni pixelar el video.
+    zoom_final = random.uniform(1.06, 1.12)
+    hacia_adentro = random.random() < 0.7  # 70% zoom in, 30% zoom out
+    def _escala_tiempo(t):
+        progreso = t / dur_clip if dur_clip > 0 else 0
+        if hacia_adentro:
+            return 1.0 + (zoom_final - 1.0) * progreso
+        return zoom_final - (zoom_final - 1.0) * progreso
+    c = c.resize(_escala_tiempo)
+    c = c.crop(x_center=RESOLUCION[0]/2, y_center=RESOLUCION[1]/2,
+               width=RESOLUCION[0], height=RESOLUCION[1])
+    return c
 
 
 def _rellenar_con_pool(clips_finales, tiempo_acumulado, limite, pool):
