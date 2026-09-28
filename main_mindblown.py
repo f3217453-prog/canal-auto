@@ -663,7 +663,7 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
     subtitulos.append(hook_clip)
 
     badge = TextClip(
-        "🔥 MINDBLOWN", fontsize=45, color=color_sub,
+        "MINDBLOWN", fontsize=45, color=color_sub,
         font="DejaVu-Sans-Bold", stroke_color="black", stroke_width=2,
     ).set_start(0).set_end(DURACION_HOOK).set_position(("center", 0.22), relative=True)
     subtitulos.append(badge)
@@ -727,7 +727,7 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
     dur_cta = min(3.0, duracion_video)
     t_inicio_cta = duracion_video - dur_cta
     cta_clip = TextClip(
-        "SUSCRÍBETE PARA MÁS 🔔",
+        "LIKE + SUBSCRIBE FOR MORE",
         fontsize=70, color="white", font="DejaVu-Sans-Bold",
         stroke_color=color_sub, stroke_width=4,
         size=(RESOLUCION[0]-100, None), method="caption"
