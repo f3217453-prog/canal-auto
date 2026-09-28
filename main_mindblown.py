@@ -252,7 +252,7 @@ TITLE RULES:
   phrase in every single title
 - Add {emoji} and #Shorts at end
 
-3 filmable scene descriptions for Pexels search (nature, science, animals, structures — generic and illustrative)
+5 filmable scene descriptions for Pexels search (nature, science, animals, structures — generic and illustrative). Make each one visually distinct from the others (different subject/setting), not variations of the same shot.
 
 Also provide a short "miniatura" line: 3-5 words in ALL CAPS summarizing the single
 most shocking fact from the whole list (used as bold text on the video thumbnail,
@@ -264,7 +264,7 @@ Return ONLY valid JSON, no markdown, no backticks:
 {{
 "hook": "...(under 8 words, stops scroll instantly)...",
 "guion": "...({formato_palabras} words STRICT countdown {formato_inicio} to 1, plus a short viewer-challenge closing line)...",
-"escenas": ["pexels search phrase 1", "pexels search phrase 2", "pexels search phrase 3"],
+"escenas": ["pexels search phrase 1", "pexels search phrase 2", "pexels search phrase 3", "pexels search phrase 4", "pexels search phrase 5"],
 "titulo": "...(under 40 chars, starts with {formato_nombre} + {emoji} + #Shorts)...",
 "miniatura": "...(3-5 words ALL CAPS, the single most shocking fact)...",
 "tags": ["mindblown", "{formato_tag}", "viral", "shorts", "facts", "soundsfake", "science", "wow", "trivia", "mindblowing"]
@@ -364,10 +364,13 @@ def generar_imagen_ia(prompt: str, indice: int, carpeta: str = "imagenes_mindblo
 
 
 def generar_imagenes(escenas: list, categoria: dict) -> list:
+    # Antes solo generaba 3 imagenes (una por escena al inicio). Ahora hasta 5,
+    # para que aparezcan mas seguido a lo largo del video en vez de depender
+    # tanto del stock de Pexels, que tiende a repetirse entre videos.
     return [
-        ruta for i, escena in enumerate(escenas[:3])
+        ruta for i, escena in enumerate(escenas[:5])
         if (ruta := generar_imagen_ia(
-            f"{escena}, cinematic dramatic", i
+            f"{escena}, cinematic dramatic, highly detailed, trending quality", i
         ))
     ]
 
@@ -465,7 +468,7 @@ def transcribir(audio_path: str):
     return resultado
 
 
-def _buscar_clips(consulta, headers, carpeta, indice, por_consulta=12):
+def _buscar_clips(consulta, headers, carpeta, indice, ids_evitar, ids_usados_out, por_consulta=15):
     rutas = []
     idx = indice
     try:
@@ -475,6 +478,9 @@ def _buscar_clips(consulta, headers, carpeta, indice, por_consulta=12):
         )
         r.raise_for_status()
         for v in r.json().get("videos", []):
+            video_id = str(v.get("id", ""))
+            if video_id and video_id in ids_evitar:
+                continue  # ya se uso en un video reciente, saltarlo
             archivos = sorted(v["video_files"], key=lambda f: f.get("width", 0))
             if not archivos:
                 continue
@@ -486,6 +492,8 @@ def _buscar_clips(consulta, headers, carpeta, indice, por_consulta=12):
                         for chunk in resp.iter_content(chunk_size=8192):
                             f.write(chunk)
                 rutas.append(destino)
+                if video_id:
+                    ids_usados_out.add(video_id)
                 idx += 1
             except Exception:
                 pass
@@ -498,20 +506,28 @@ def descargar_clips(escenas, categoria, carpeta="clips_mindblown"):
     os.makedirs(carpeta, exist_ok=True)
     headers = {"Authorization": PEXELS_API_KEY}
     indice = 0
+    ids_evitar = leer_historial_clips()
+    ids_usados = set()
+    print(f"Clips en historial a evitar: {len(ids_evitar)}")
+
     clips_por_escena = []
     for escena in escenas:
-        rutas, indice = _buscar_clips(escena, headers, carpeta, indice, 12)
+        rutas, indice = _buscar_clips(escena, headers, carpeta, indice, ids_evitar, ids_usados)
         clips_por_escena.append(rutas)
     pool_generico = []
     for consulta in categoria["consultas_broll"]:
-        rutas, indice = _buscar_clips(consulta, headers, carpeta, indice, 12)
+        rutas, indice = _buscar_clips(consulta, headers, carpeta, indice, ids_evitar, ids_usados)
         pool_generico.extend(rutas)
     total = sum(len(c) for c in clips_por_escena) + len(pool_generico)
     if total < 40:
+        # Si evitar repeticiones nos deja con pocos clips, permitimos repetir
+        # como ultimo recurso (mejor un clip repetido que un video corto).
         for consulta in CONSULTAS_RESPALDO:
-            extra, indice = _buscar_clips(consulta, headers, carpeta, indice, 12)
+            extra, indice = _buscar_clips(consulta, headers, carpeta, indice, set(), ids_usados)
             pool_generico.extend(extra)
     print(f"Total clips: {sum(len(c) for c in clips_por_escena) + len(pool_generico)}")
+
+    actualizar_historial_clips(ids_usados, ids_evitar)
     return clips_por_escena, pool_generico
 
 
@@ -782,6 +798,51 @@ def actualizar_contador(numero: int):
         requests.put(url, headers=headers, json=body, timeout=15)
     except Exception as e:
         print(f"Aviso contador (escritura): {e}")
+
+
+HISTORIAL_MAX = 400  # cuantos IDs de clips recientes recordar, para no repetir
+
+
+def leer_historial_clips() -> set:
+    """Lee los IDs de clips de Pexels usados recientemente, para evitar
+    repetirlos en videos nuevos."""
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    token = os.environ.get("GH_TOKEN", "")
+    if not repo or not token:
+        return set()
+    try:
+        r = requests.get(
+            f"https://api.github.com/repos/{repo}/contents/historial_clips.json",
+            headers={"Authorization": f"token {token}"}, timeout=15
+        )
+        if r.status_code == 200:
+            contenido = base64.b64decode(r.json()["content"]).decode()
+            return set(json.loads(contenido))
+    except Exception as e:
+        print(f"Aviso historial (lectura): {e}")
+    return set()
+
+
+def actualizar_historial_clips(ids_usados_nuevos: set, ids_previos: set):
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    token = os.environ.get("GH_TOKEN", "")
+    if not repo or not token:
+        return
+    try:
+        combinados = list(ids_previos.union(ids_usados_nuevos))
+        # Nos quedamos solo con los mas recientes para no crecer sin limite
+        combinados = combinados[-HISTORIAL_MAX:]
+        url = f"https://api.github.com/repos/{repo}/contents/historial_clips.json"
+        headers = {"Authorization": f"token {token}"}
+        r = requests.get(url, headers=headers, timeout=15)
+        sha = r.json().get("sha") if r.status_code == 200 else None
+        contenido_b64 = base64.b64encode(json.dumps(combinados).encode()).decode()
+        body = {"message": "Actualizar historial de clips", "content": contenido_b64}
+        if sha:
+            body["sha"] = sha
+        requests.put(url, headers=headers, json=body, timeout=15)
+    except Exception as e:
+        print(f"Aviso historial (escritura): {e}")
 
 
 def subir_youtube(video_path, titulo, descripcion, tags, miniatura_path=None):
