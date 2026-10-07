@@ -305,8 +305,12 @@ def generar_contenido() -> tuple:
                 r = requests.post(url, json=body, timeout=60)
                 print(f"[{modelo} intento {intento+1}] HTTP {r.status_code}", flush=True)
                 if r.status_code in (503, 429):
-                    print(f"[{modelo} intento {intento+1}] Rate limit / sobrecarga, esperando...", flush=True)
-                    time.sleep(15)
+                    # Espera progresiva (15s, 30s, 45s) en vez de siempre 15s:
+                    # si el modelo esta sobrecargado, dar mas margen antes de
+                    # reintentar aumenta la chance de que ya se haya liberado.
+                    espera = 15 * (intento + 1)
+                    print(f"[{modelo} intento {intento+1}] Rate limit / sobrecarga, esperando {espera}s...", flush=True)
+                    time.sleep(espera)
                     continue
                 if r.status_code != 200:
                     print(f"[{modelo} intento {intento+1}] Respuesta de error: {r.text[:500]}", flush=True)
