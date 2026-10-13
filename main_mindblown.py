@@ -459,8 +459,28 @@ def generar_audio(texto: str, salida: str = "audio_mindblown.mp3"):
     rate = f"+{random.randint(8, 18)}%"
     pitch = f"+{random.randint(0, 4)}Hz"
     print(f"Voz: {voz} | rate: {rate} | pitch: {pitch}")
-    asyncio.run(_tts(texto, salida, voz, rate, pitch))
-    return salida
+
+    # edge-tts depende de un servicio interno de Microsoft (no documentado
+    # oficialmente) que a veces rechaza la conexion con errores tipo
+    # "403 Invalid response status" de forma pasajera. Reintentamos con
+    # espera creciente, y si sigue fallando, probamos con otra voz distinta
+    # por si el fallo esta ligado a esa voz en concreto.
+    ultimo_error = None
+    for intento in range(4):
+        try:
+            if intento > 0:
+                voz = random.choice(VOCES)
+                print(f"[audio intento {intento+1}] Reintentando con voz: {voz}", flush=True)
+            asyncio.run(_tts(texto, salida, voz, rate, pitch))
+            return salida
+        except Exception as e:
+            ultimo_error = e
+            espera = 10 * (intento + 1)
+            print(f"[audio intento {intento+1}] Fallo edge-tts: {type(e).__name__}: {e}", flush=True)
+            print(f"[audio intento {intento+1}] Esperando {espera}s antes de reintentar...", flush=True)
+            time.sleep(espera)
+
+    raise RuntimeError(f"edge-tts fallo tras 4 intentos. Ultimo error: {ultimo_error}")
 
 
 def transcribir(audio_path: str):
