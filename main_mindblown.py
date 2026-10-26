@@ -236,11 +236,13 @@ COUNTDOWN RULES:
 - Near the middle, add ONE short line of tension like "but wait, it gets crazier..."
 - #1: the most jaw-dropping, unbelievable entry — must deliver on the hype
 - Keep it PG — no violence, no gore, family-friendly amazement
-- END the script with a short direct challenge to the viewer, for example:
-  "Comment which number surprised you the most." or
-  "Bet you only knew 2 of these — tell me which ones."
-  This closing line is separate from the countdown entries and should
-  feel natural, not forced.
+- END the script with ONE short closing line (max 14 words) that does 3 things:
+  (1) asks a quick vote ("Which number shocked you most?"),
+  (2) gives a reason to subscribe ("Subscribe — tomorrow's number 1 is even crazier."),
+  (3) its LAST 2-4 words must flow naturally back into the hook, so when the
+  video replays it feels like one endless loop (e.g. the line ends on an open
+  phrase like "...and honestly, this sounds" / "...because this should not be").
+  Do not write "like and subscribe" — always give a concrete reason instead.
 - Never claim "caught on camera" or "recorded live" — frame everything as
   facts, records, and things that exist or are true, not footage of an event.
 
@@ -767,7 +769,7 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
     dur_cta = min(3.0, duracion_video)
     t_inicio_cta = duracion_video - dur_cta
     cta_clip = TextClip(
-        "LIKE + SUBSCRIBE FOR MORE",
+        "SUBSCRIBE: TOMORROW'S #1 IS WILDER",
         fontsize=70, color="white", font="DejaVu-Sans-Bold",
         stroke_color=color_sub, stroke_width=4,
         size=(RESOLUCION[0]-100, None), method="caption"
