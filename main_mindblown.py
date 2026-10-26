@@ -295,9 +295,13 @@ def generar_contenido() -> tuple:
         # Subido de 1500 a 2500: el prompt actual es mas largo (formato variable,
         # miniatura, etc.) y con 1500 el JSON de salida se podia cortar a la mitad
         # y quedar invalido, causando fallos silenciosos sin razon visible.
-        "generationConfig": {"temperature": 0.95, "maxOutputTokens": 2500}
+        "generationConfig": {"temperature": 0.95, "maxOutputTokens": 4096}
     }
-    for modelo in MODELOS_GEMINI:
+    for ronda in range(2):
+      if ronda > 0:
+        print("Todos los modelos fallaron, esperando 60s y reintentando ronda 2...", flush=True)
+        time.sleep(60)
+      for modelo in MODELOS_GEMINI:
         for intento in range(3):
             try:
                 url = (
@@ -323,6 +327,7 @@ def generar_contenido() -> tuple:
                     print(f"[{modelo} intento {intento+1}] Sin candidates. Detalle: {str(motivo)[:500]}", flush=True)
                     time.sleep(5)
                     continue
+                print(f"[{modelo} intento {intento+1}] finishReason: {data['candidates'][0].get('finishReason')}", flush=True)
                 texto = data["candidates"][0]["content"]["parts"][0]["text"].strip()
                 texto = re.sub(r"```json|```", "", texto).strip()
                 try:
