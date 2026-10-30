@@ -1,5 +1,5 @@
 """
-MindBlown - Pipeline Top 10 Viral Moments - Version 1.2
+MindBlown - Pipeline Top 10 Viral Moments - Version 1.3
 
 Top 10 de datos, records y comparaciones extremas.
 Todo con material libre de derechos de Pexels.
@@ -614,6 +614,46 @@ def _rellenar_con_pool(clips_finales, tiempo_acumulado, limite, pool):
     return tiempo_acumulado
 
 
+def crear_texto(texto, fontsize, color, stroke_color="black", stroke_width=2, ancho=None):
+    """Texto como imagen con PIL (en vez de TextClip/ImageMagick, que en GitHub
+    falla por la politica de seguridad de ImageMagick). Devuelve un ImageClip
+    con fondo transparente, texto centrado y ajustado en varias lineas."""
+    import numpy as np
+    ruta_fuente = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+    try:
+        fuente = ImageFont.truetype(ruta_fuente, fontsize)
+    except Exception:
+        fuente = ImageFont.load_default()
+    ancho_max = ancho if ancho else RESOLUCION[0] - 100
+    medidor = ImageDraw.Draw(Image.new("RGBA", (10, 10)))
+    lineas, actual = [], ""
+    for palabra in texto.split():
+        prueba = f"{actual} {palabra}".strip()
+        if medidor.textlength(prueba, font=fuente) > ancho_max and actual:
+            lineas.append(actual)
+            actual = palabra
+        else:
+            actual = prueba
+    if actual:
+        lineas.append(actual)
+    if not lineas:
+        lineas = [" "]
+    margen = stroke_width + 6
+    alto_linea = int(fontsize * 1.25)
+    ancho_img = ancho if ancho else int(
+        max(medidor.textlength(l, font=fuente) for l in lineas)) + 2 * margen
+    alto_img = alto_linea * len(lineas) + 2 * margen
+    img = Image.new("RGBA", (ancho_img, alto_img), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    y = margen
+    for linea in lineas:
+        w = medidor.textlength(linea, font=fuente)
+        d.text(((ancho_img - w) / 2, y), linea, font=fuente, fill=color,
+               stroke_width=stroke_width, stroke_fill=stroke_color)
+        y += alto_linea
+    return ImageClip(np.array(img))
+
+
 def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
                  segmentos, hook_texto, musica_path, categoria,
                  salida="video_mindblown.mp4"):
@@ -701,17 +741,12 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
         .set_end(DURACION_HOOK)
     )
 
-    hook_clip = TextClip(
-        hook_texto.upper(),
-        fontsize=78, color="white", font="DejaVu-Sans-Bold",
-        stroke_color=color_sub, stroke_width=4,
-        size=(RESOLUCION[0]-80, None), method="caption"
+    hook_clip = crear_texto(
+        hook_texto.upper(), 78, "white", color_sub, 4, RESOLUCION[0]-80
     ).set_start(0).set_end(DURACION_HOOK).set_position("center")
     subtitulos.append(hook_clip)
 
-    badge = TextClip(
-        "MINDBLOWN", fontsize=45, color=color_sub,
-        font="DejaVu-Sans-Bold", stroke_color="black", stroke_width=2,
+    badge = crear_texto("MINDBLOWN", 45, color_sub, "black", 2
     ).set_start(0).set_end(DURACION_HOOK).set_position(("center", 0.22), relative=True)
     subtitulos.append(badge)
 
@@ -756,28 +791,22 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
             color = "#FFD700" if contiene_numero else (color_sub if contiene_clave else "white")
             tam = 72 if len(grupo) > 1 else 88
 
-            subtitulos.append(TextClip(
-                texto_grupo.upper(), fontsize=tam, color="black",
-                font="DejaVu-Sans-Bold", stroke_color="black", stroke_width=4,
-                size=(RESOLUCION[0]-100, None), method="caption"
+            subtitulos.append(crear_texto(
+                texto_grupo.upper(), tam, "black", "black", 4, RESOLUCION[0]-100
             ).set_start(t_inicio).set_end(t_fin).set_position(
                 (RESOLUCION[0]//2 - 3 - (RESOLUCION[0]-100)//2, int(RESOLUCION[1] * 0.70) + 3)
             ))
-            subtitulos.append(TextClip(
-                texto_grupo.upper(), fontsize=tam, color=color,
-                font="DejaVu-Sans-Bold", stroke_color="black", stroke_width=2,
-                size=(RESOLUCION[0]-100, None), method="caption"
+            subtitulos.append(crear_texto(
+                texto_grupo.upper(), tam, color, "black", 2, RESOLUCION[0]-100
             ).set_start(t_inicio).set_end(t_fin).set_position(
                 ("center", 0.70), relative=True
             ))
 
     dur_cta = min(3.0, duracion_video)
     t_inicio_cta = duracion_video - dur_cta
-    cta_clip = TextClip(
-        "SUBSCRIBE: TOMORROW'S #1 IS WILDER",
-        fontsize=70, color="white", font="DejaVu-Sans-Bold",
-        stroke_color=color_sub, stroke_width=4,
-        size=(RESOLUCION[0]-100, None), method="caption"
+    cta_clip = crear_texto(
+        "SUBSCRIBE: TOMORROW'S #1 IS WILDER", 70, "white", color_sub, 4,
+        RESOLUCION[0]-100
     ).set_start(t_inicio_cta).set_end(duracion_video).set_position(
         ("center", 0.15), relative=True
     )
