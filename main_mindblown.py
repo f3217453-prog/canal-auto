@@ -141,6 +141,80 @@ CATEGORIAS = {
         "color_sub": "#FFD700",
         "emoji_titulo": "🏆",
     },
+    "sports_records": {
+        "peso": 3,
+        "tags_extra": ["sportsfacts", "sports", "athletes", "olympics",
+                        "sportsrecords", "fastest", "strongest", "sportstrivia"],
+        "temas": [
+            "sports records that sound fake but are true",
+            "the most unbelievable feats in Olympic history",
+            "athlete physical abilities that sound impossible but are real",
+            "unbeatable sports records that may never be broken",
+            "sports facts that sound made up but are real",
+            "the fastest, strongest and highest feats in sports history",
+            "strange sports and rules that sound fake but are real",
+        ],
+        "consultas_broll": [
+            "athlete sprinting track slow motion", "basketball game slow motion",
+            "soccer stadium crowd night", "weightlifting gym barbell",
+            "marathon runners city", "swimmer underwater pool",
+            "tennis serve slow motion", "cyclist road race",
+            "stadium aerial night lights", "boxing training gym",
+            "high jump athlete", "ski jumping winter",
+        ],
+        "color_sub": "#2ECC71",
+        "emoji_titulo": "⚽",
+    },
+    "guinness_records": {
+        "peso": 3,
+        "tags_extra": ["guinnessworldrecords", "worldrecords", "records",
+                        "recordbreaking", "weirdrecords", "biggest", "smallest",
+                        "unbelievable"],
+        "nota": "Not affiliated with Guinness World Records. Records can be broken, "
+                "so figures may have changed since this video.",
+        "temas": [
+            "Guinness World Records that sound fake but are true",
+            "the strangest Guinness World Records ever set",
+            "the biggest and smallest things in Guinness World Records",
+            "Guinness World Records for the human body",
+            "record-breaking animals in Guinness World Records",
+            "Guinness World Records in food and eating",
+            "record-breaking things people built or collected",
+        ],
+        "consultas_broll": [
+            "crowd cheering celebration", "trophy gold medal close up",
+            "stopwatch timer close up", "giant skyscraper looking up",
+            "hot air balloons sunrise", "strongman lifting heavy",
+            "fireworks night sky", "huge pile of food close up",
+            "world map globe spinning", "judge notebook clipboard",
+            "confetti celebration slow motion", "stack of books library",
+        ],
+        "color_sub": "#F1C40F",
+        "emoji_titulo": "📜",
+    },
+    "everyday_curiosities": {
+        "peso": 2,
+        "tags_extra": ["funfacts", "foodfacts", "moneyfacts", "techfacts",
+                        "languagefacts", "everydayfacts", "factsyoudidntknow", "curiosities"],
+        "temas": [
+            "everyday objects with facts that sound fake but are true",
+            "food facts that sound fake but are true",
+            "facts about money that sound fake but are true",
+            "facts about words and language that sound fake but are true",
+            "facts about technology that sound fake but are true",
+            "facts about your daily life that sound fake but are true",
+        ],
+        "consultas_broll": [
+            "coffee beans close up", "cooking kitchen close up",
+            "honey dripping slow motion", "city street time lapse",
+            "coins money close up", "old books pages turning",
+            "clock time lapse", "smartphone hands close up",
+            "food market colorful", "sunrise window morning",
+            "keyboard typing close up", "supermarket shelves",
+        ],
+        "color_sub": "#E67E22",
+        "emoji_titulo": "🤔",
+    },
     "natural_phenomena": {
         "peso": 1,
         "tags_extra": ["naturephenomena", "extremeweather", "earthfacts",
@@ -245,6 +319,18 @@ COUNTDOWN RULES:
   Do not write "like and subscribe" — always give a concrete reason instead.
 - Never claim "caught on camera" or "recorded live" — frame everything as
   facts, records, and things that exist or are true, not footage of an event.
+- ACCURACY (critical): include ONLY facts you are highly confident are true.
+  Never invent a number, name, place or date. If you are not sure about a
+  detail, choose a different fact instead of guessing.
+- RECORDS (sports and Guinness World Records): state the record plainly with its
+  number (distance, time, weight, count) and say "according to Guinness World
+  Records" or "the official record" only when you are confident. Records get
+  broken, so use wording like "the record stood at" or "at last count" instead
+  of "the current record is". Do not name private individuals; famous record
+  holders and athletes are fine.
+- SPORTS: use stats, records and rules, never describe specific match footage.
+- Each entry must contain a concrete number, name or comparison — no vague claims
+  like "some people" or "scientists say" without saying what.
 
 TITLE RULES:
 - Under 40 characters (mobile truncates longer)
@@ -254,7 +340,7 @@ TITLE RULES:
   phrase in every single title
 - Add {emoji} and #Shorts at end
 
-5 filmable scene descriptions for Pexels search (nature, science, animals, structures — generic and illustrative). Make each one visually distinct from the others (different subject/setting), not variations of the same shot.
+5 filmable scene descriptions for Pexels search (nature, science, animals, structures, sports, everyday life — generic and illustrative, never specific people, brands or logos). Make each one visually distinct from the others (different subject/setting), not variations of the same shot.
 
 Also provide a short "miniatura" line: 3-5 words in ALL CAPS summarizing the single
 most shocking fact from the whole list (used as bold text on the video thumbnail,
@@ -997,11 +1083,13 @@ def main():
         tags.append(t)
         largo_actual += len(t) + 1
 
+    nota = categoria.get("nota", "")
     descripcion = (
         f"MindBlown #{episodio}\n\n"
         f"{contenido['guion']}\n\n"
         f"🔥 Subscribe to MindBlown for daily mind-blowing facts.\n\n"
-        f"{' '.join(hashtags_finales)}"
+        + (f"{nota}\n\n" if nota else "")
+        + f"{' '.join(hashtags_finales)}"
     )
     subir_youtube(video_path, titulo, descripcion, tags, miniatura_path)
     actualizar_contador(episodio + 1)
