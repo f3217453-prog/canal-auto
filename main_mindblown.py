@@ -56,6 +56,20 @@ VOCES = [
     "en-GB-SoniaNeural",
 ]
 
+# Parejas (narrador, voz de reaccion). Cada video usa una pareja: la mitad de las
+# veces la pareja "firma" del canal (para que se reconozca) y el resto una al azar
+# (para dar variedad y que no suene siempre igual).
+PARES_VOCES = [
+    ("en-US-AndrewNeural", "en-US-JennyNeural"),
+    ("en-GB-RyanNeural", "en-GB-SoniaNeural"),
+    ("en-US-GuyNeural", "en-AU-WilliamNeural"),
+    ("en-US-ChristopherNeural", "en-US-JennyNeural"),
+    ("en-AU-WilliamNeural", "en-GB-SoniaNeural"),
+    ("en-GB-ThomasNeural", "en-US-JennyNeural"),
+]
+PAR_FIRMA = PARES_VOCES[0]
+PROB_PAR_FIRMA = 0.5
+
 MUSICA = [
     "https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73467.mp3",
     "https://cdn.pixabay.com/download/audio/2022/01/27/audio_d0c6ff1d24.mp3",
@@ -359,13 +373,12 @@ Also provide a short "miniatura" line: 3-5 words in ALL CAPS summarizing the sin
 most shocking fact from the whole list (used as bold text on the video thumbnail,
 separate from the hook and title).
 
-STRICT: {formato_palabras} words ENGLISH ONLY in total across all "partes" (countdown, reactions and closing line). Every word earns its place.
+STRICT: {formato_palabras} words ENGLISH ONLY in total across all "partes" (countdown {formato_inicio} to 1, reactions and closing line). Every word earns its place.
 
 Return ONLY valid JSON, no markdown, no backticks:
 {{
 "hook": "...(under 8 words, stops scroll instantly)...",
 "partes": [{{"voz": "main", "texto": "...hook and first entries..."}}, {{"voz": "react", "texto": "Wait, what?!"}}, {{"voz": "main", "texto": "...next entries, tension line, closing line..."}}],
-"_nota_partes": "({formato_palabras} words STRICT in total, countdown {formato_inicio} to 1, then the closing line. Replace this note with nothing: leave it out of your answer.)",
 "escenas": ["pexels search phrase 1", "pexels search phrase 2", "pexels search phrase 3", "pexels search phrase 4", "pexels search phrase 5"],
 "titulo": "...(under 40 chars, starts with {formato_nombre} + {emoji} + #Shorts)...",
 "miniatura": "...(3-5 words ALL CAPS, the single most shocking fact)...",
@@ -588,6 +601,70 @@ def generar_audio(texto: str, salida: str = "audio_mindblown.mp3"):
             time.sleep(espera)
 
     raise RuntimeError(f"edge-tts fallo tras 4 intentos. Ultimo error: {ultimo_error}")
+
+
+def normalizar_partes(contenido: dict) -> list:
+    """Devuelve la lista de partes [{'voz': 'main'|'react', 'texto': str}].
+    Si Gemini no manda 'partes' (o vienen mal), usa 'guion' como una sola voz."""
+    partes = []
+    for p in contenido.get("partes") or []:
+        if isinstance(p, dict) and isinstance(p.get("texto"), str) and p["texto"].strip():
+            texto = p["texto"].strip()
+            voz = "react" if str(p.get("voz", "")).lower().startswith("react") else "main"
+            if voz == "react" and len(texto.split()) > 8:
+                voz = "main"  # una reaccion larga no es reaccion: la lee el narrador
+            partes.append({"voz": voz, "texto": texto})
+    if not partes and isinstance(contenido.get("guion"), str) and contenido["guion"].strip():
+        partes = [{"voz": "main", "texto": contenido["guion"].strip()}]
+    if not partes:
+        raise RuntimeError("El contenido no trae ni 'partes' ni 'guion'")
+    return partes
+
+
+def elegir_par_de_voces() -> tuple:
+    if random.random() < PROB_PAR_FIRMA:
+        return PAR_FIRMA
+    return random.choice(PARES_VOCES)
+
+
+def _tts_con_reintentos(texto: str, salida: str, voz: str, rate: str, pitch: str):
+    ultimo_error = None
+    for intento in range(4):
+        try:
+            if intento > 0:
+                voz = random.choice(VOCES)
+                print(f"[audio intento {intento+1}] Reintentando con voz: {voz}", flush=True)
+            asyncio.run(_tts(texto, salida, voz, rate, pitch))
+            return
+        except Exception as e:
+            ultimo_error = e
+            espera = 10 * (intento + 1)
+            print(f"[audio intento {intento+1}] Fallo edge-tts: {type(e).__name__}: {e}", flush=True)
+            time.sleep(espera)
+    raise RuntimeError(f"edge-tts fallo tras 4 intentos. Ultimo error: {ultimo_error}")
+
+
+def generar_audio_partes(partes: list, salida: str = "audio_mindblown.mp3"):
+    """Narrador + voz de reaccion: cada parte se genera por separado y se unen en orden."""
+    narrador, reaccion = elegir_par_de_voces()
+    rate_n = f"+{random.randint(8, 18)}%"
+    pitch_n = f"+{random.randint(0, 4)}Hz"
+    print(f"Voces: narrador={narrador} | reaccion={reaccion} | rate: {rate_n} | pitch: {pitch_n}")
+    rutas = []
+    for i, p in enumerate(partes):
+        ruta = f"parte_audio_{i}.mp3"
+        if p["voz"] == "react":
+            _tts_con_reintentos(p["texto"], ruta, reaccion, "+20%", "+6Hz")
+        else:
+            _tts_con_reintentos(p["texto"], ruta, narrador, rate_n, pitch_n)
+        rutas.append(ruta)
+    clips = [AudioFileClip(r) for r in rutas]
+    try:
+        concatenate_audioclips(clips).write_audiofile(salida, logger=None)
+    finally:
+        for c in clips:
+            c.close()
+    return salida
 
 
 def transcribir(audio_path: str):
@@ -905,12 +982,24 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
     dur_cta = min(3.0, duracion_video)
     t_inicio_cta = duracion_video - dur_cta
     cta_clip = crear_texto(
-        "SUBSCRIBE: TOMORROW'S #1 IS WILDER", 70, "white", color_sub, 4,
+        "COMMENT YOUR NUMBER! SUBSCRIBE: TOMORROW'S #1 IS WILDER", 64, "white", color_sub, 4,
         RESOLUCION[0]-100
     ).set_start(t_inicio_cta).set_end(duracion_video).set_position(
         ("center", 0.15), relative=True
     )
     subtitulos.append(cta_clip)
+
+    # Aviso corto a mitad del video: refuerza la retencion ("espera al #1") y
+    # recuerda seguir el canal justo cuando el espectador esta enganchado.
+    if duracion_video > 12:
+        t_mid = duracion_video * 0.45
+        mid_clip = crear_texto(
+            "FOLLOW FOR MORE - #1 IS INSANE", 52, "white", color_sub, 3,
+            RESOLUCION[0]-160
+        ).set_start(t_mid).set_end(t_mid + 2.2).set_position(
+            ("center", 0.10), relative=True
+        )
+        subtitulos.append(mid_clip)
 
     final = CompositeVideoClip(
         [video_base, overlay, *subtitulos]
@@ -1052,7 +1141,13 @@ def main():
     imagenes_ia = generar_imagenes(escenas, categoria)
     clips_por_escena, pool_generico = descargar_clips(escenas, categoria)
     musica_path = descargar_musica()
-    audio_path = generar_audio(contenido["guion"])
+    partes = normalizar_partes(contenido)
+    contenido["guion"] = " ".join(p["texto"] for p in partes)  # para la descripcion
+    try:
+        audio_path = generar_audio_partes(partes)
+    except Exception as e:
+        print(f"Aviso: fallo el audio con dos voces ({type(e).__name__}: {e}). Uso una sola voz.", flush=True)
+        audio_path = generar_audio(contenido["guion"])
     segmentos = transcribir(audio_path)
     hook_texto = contenido.get("hook", "This sounds fake but it's real.")
 
