@@ -311,7 +311,7 @@ COUNTDOWN RULES:
 - #1: the most jaw-dropping, unbelievable entry — must deliver on the hype
 - Keep it PG — no violence, no gore, family-friendly amazement
 - END the script with ONE short closing line (max 14 words) that does 3 things:
-  (1) asks a quick vote ("Which number shocked you most?"),
+  (1) asks viewers to comment a number ("Comment the number that shocked you most."),
   (2) gives a reason to subscribe ("Subscribe — tomorrow's number 1 is even crazier."),
   (3) its LAST 2-4 words must flow naturally back into the hook, so when the
   video replays it feels like one endless loop (e.g. the line ends on an open
@@ -332,6 +332,19 @@ COUNTDOWN RULES:
 - Each entry must contain a concrete number, name or comparison — no vague claims
   like "some people" or "scientists say" without saying what.
 
+PERSONALITY AND VOICES (this is what makes people like and follow):
+- Talk TO the viewer: use "you" and "your" often ("You won't believe...", "Guess what happens next").
+- Show real emotion: surprise, disbelief, a little humor. Never sound like an encyclopedia.
+- Add a tiny cliffhanger before the biggest entries ("Number 2 sounds like a joke...").
+- The script is split into "partes" read by two voices:
+  * "main" = the narrator, reads almost everything.
+  * "react" = a second, more excited voice used ONLY for very short reactions
+    (1-5 words) right after a big fact, e.g. "Wait, what?!", "No way.", "That's insane!".
+    Use 2-4 react lines in a Top 5 or Top 10, and 1-2 in a Top 3. Never two react
+    lines in a row, never as the first or last part, and never for facts or numbers.
+  * Read in order, all parts must form ONE smooth script (hook, countdown, tension
+    line, closing line). The react lines count toward the word total.
+
 TITLE RULES:
 - Under 40 characters (mobile truncates longer)
 - Start with "{formato_nombre}" (e.g. "{formato_nombre} Facts You Won't Believe")
@@ -346,12 +359,13 @@ Also provide a short "miniatura" line: 3-5 words in ALL CAPS summarizing the sin
 most shocking fact from the whole list (used as bold text on the video thumbnail,
 separate from the hook and title).
 
-STRICT: {formato_palabras} words ENGLISH ONLY for the countdown, plus a short viewer-challenge closing line. Every word earns its place.
+STRICT: {formato_palabras} words ENGLISH ONLY in total across all "partes" (countdown, reactions and closing line). Every word earns its place.
 
 Return ONLY valid JSON, no markdown, no backticks:
 {{
 "hook": "...(under 8 words, stops scroll instantly)...",
-"guion": "...({formato_palabras} words STRICT countdown {formato_inicio} to 1, plus a short viewer-challenge closing line)...",
+"partes": [{{"voz": "main", "texto": "...hook and first entries..."}}, {{"voz": "react", "texto": "Wait, what?!"}}, {{"voz": "main", "texto": "...next entries, tension line, closing line..."}}],
+"_nota_partes": "({formato_palabras} words STRICT in total, countdown {formato_inicio} to 1, then the closing line. Replace this note with nothing: leave it out of your answer.)",
 "escenas": ["pexels search phrase 1", "pexels search phrase 2", "pexels search phrase 3", "pexels search phrase 4", "pexels search phrase 5"],
 "titulo": "...(under 40 chars, starts with {formato_nombre} + {emoji} + #Shorts)...",
 "miniatura": "...(3-5 words ALL CAPS, the single most shocking fact)...",
