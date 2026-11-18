@@ -56,19 +56,16 @@ VOCES = [
     "en-GB-SoniaNeural",
 ]
 
-# Parejas (narrador, voz de reaccion). Cada video usa una pareja: la mitad de las
-# veces la pareja "firma" del canal (para que se reconozca) y el resto una al azar
-# (para dar variedad y que no suene siempre igual).
-PARES_VOCES = [
-    ("en-US-AndrewNeural", "en-US-JennyNeural"),
-    ("en-GB-RyanNeural", "en-GB-SoniaNeural"),
-    ("en-US-GuyNeural", "en-AU-WilliamNeural"),
-    ("en-US-ChristopherNeural", "en-US-JennyNeural"),
-    ("en-AU-WilliamNeural", "en-GB-SoniaNeural"),
-    ("en-GB-ThomasNeural", "en-US-JennyNeural"),
+# Una sola voz por video. Los videos alternan: episodio impar = voz de hombre,
+# episodio par = voz de mujer (ver main). Dentro de cada genero se elige al azar.
+VOCES_HOMBRE = [
+    "en-US-AndrewNeural", "en-US-GuyNeural", "en-GB-RyanNeural",
+    "en-AU-WilliamNeural", "en-US-ChristopherNeural", "en-GB-ThomasNeural",
 ]
-PAR_FIRMA = PARES_VOCES[0]
-PROB_PAR_FIRMA = 0.5
+VOCES_MUJER = [
+    "en-US-JennyNeural", "en-GB-SoniaNeural", "en-US-AriaNeural",
+    "en-US-AvaNeural", "en-AU-NatashaNeural",
+]
 
 MUSICA = [
     "https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73467.mp3",
@@ -346,18 +343,12 @@ COUNTDOWN RULES:
 - Each entry must contain a concrete number, name or comparison — no vague claims
   like "some people" or "scientists say" without saying what.
 
-PERSONALITY AND VOICES (this is what makes people like and follow):
+PERSONALITY (this is what makes people like and follow):
 - Talk TO the viewer: use "you" and "your" often ("You won't believe...", "Guess what happens next").
 - Show real emotion: surprise, disbelief, a little humor. Never sound like an encyclopedia.
 - Add a tiny cliffhanger before the biggest entries ("Number 2 sounds like a joke...").
-- The script is split into "partes" read by two voices:
-  * "main" = the narrator, reads almost everything.
-  * "react" = a second, more excited voice used ONLY for very short reactions
-    (1-5 words) right after a big fact, e.g. "Wait, what?!", "No way.", "That's insane!".
-    Use 2-4 react lines in a Top 5 or Top 10, and 1-2 in a Top 3. Never two react
-    lines in a row, never as the first or last part, and never for facts or numbers.
-  * Read in order, all parts must form ONE smooth script (hook, countdown, tension
-    line, closing line). The react lines count toward the word total.
+- A short reaction like "Wait, what?!" or "No way." can follow a big fact, written
+  as part of the same narration. Use 2-4 in a Top 5 or Top 10, 1-2 in a Top 3.
 
 TITLE RULES:
 - Under 40 characters (mobile truncates longer)
@@ -373,12 +364,12 @@ Also provide a short "miniatura" line: 3-5 words in ALL CAPS summarizing the sin
 most shocking fact from the whole list (used as bold text on the video thumbnail,
 separate from the hook and title).
 
-STRICT: {formato_palabras} words ENGLISH ONLY in total across all "partes" (countdown {formato_inicio} to 1, reactions and closing line). Every word earns its place.
+STRICT: {formato_palabras} words ENGLISH ONLY in total (countdown {formato_inicio} to 1, reactions and closing line). Every word earns its place.
 
 Return ONLY valid JSON, no markdown, no backticks:
 {{
 "hook": "...(under 8 words, stops scroll instantly)...",
-"partes": [{{"voz": "main", "texto": "...hook and first entries..."}}, {{"voz": "react", "texto": "Wait, what?!"}}, {{"voz": "main", "texto": "...next entries, tension line, closing line..."}}],
+"guion": "...({formato_palabras} words STRICT countdown {formato_inicio} to 1, plus a short viewer-challenge closing line)...",
 "escenas": ["pexels search phrase 1", "pexels search phrase 2", "pexels search phrase 3", "pexels search phrase 4", "pexels search phrase 5"],
 "titulo": "...(under 40 chars, starts with {formato_nombre} + {emoji} + #Shorts)...",
 "miniatura": "...(3-5 words ALL CAPS, the single most shocking fact)...",
@@ -571,8 +562,9 @@ async def _tts(texto: str, salida: str, voz: str, rate: str, pitch: str):
     await comunicador.save(salida)
 
 
-def generar_audio(texto: str, salida: str = "audio_mindblown.mp3"):
-    voz = random.choice(VOCES)
+def generar_audio(texto: str, salida: str = "audio_mindblown.mp3", genero: str = "hombre"):
+    pool = VOCES_MUJER if genero == "mujer" else VOCES_HOMBRE
+    voz = random.choice(pool)
     # Un poco mas rapido y con tono ligeramente mas alto = suena mas energico
     # y entretenido que la velocidad/tono neutro por defecto. Se varia un poco
     # en cada video para que no suene siempre identico.
@@ -589,7 +581,7 @@ def generar_audio(texto: str, salida: str = "audio_mindblown.mp3"):
     for intento in range(4):
         try:
             if intento > 0:
-                voz = random.choice(VOCES)
+                voz = random.choice(pool)  # reintento con otra voz del MISMO genero
                 print(f"[audio intento {intento+1}] Reintentando con voz: {voz}", flush=True)
             asyncio.run(_tts(texto, salida, voz, rate, pitch))
             return salida
@@ -601,70 +593,6 @@ def generar_audio(texto: str, salida: str = "audio_mindblown.mp3"):
             time.sleep(espera)
 
     raise RuntimeError(f"edge-tts fallo tras 4 intentos. Ultimo error: {ultimo_error}")
-
-
-def normalizar_partes(contenido: dict) -> list:
-    """Devuelve la lista de partes [{'voz': 'main'|'react', 'texto': str}].
-    Si Gemini no manda 'partes' (o vienen mal), usa 'guion' como una sola voz."""
-    partes = []
-    for p in contenido.get("partes") or []:
-        if isinstance(p, dict) and isinstance(p.get("texto"), str) and p["texto"].strip():
-            texto = p["texto"].strip()
-            voz = "react" if str(p.get("voz", "")).lower().startswith("react") else "main"
-            if voz == "react" and len(texto.split()) > 8:
-                voz = "main"  # una reaccion larga no es reaccion: la lee el narrador
-            partes.append({"voz": voz, "texto": texto})
-    if not partes and isinstance(contenido.get("guion"), str) and contenido["guion"].strip():
-        partes = [{"voz": "main", "texto": contenido["guion"].strip()}]
-    if not partes:
-        raise RuntimeError("El contenido no trae ni 'partes' ni 'guion'")
-    return partes
-
-
-def elegir_par_de_voces() -> tuple:
-    if random.random() < PROB_PAR_FIRMA:
-        return PAR_FIRMA
-    return random.choice(PARES_VOCES)
-
-
-def _tts_con_reintentos(texto: str, salida: str, voz: str, rate: str, pitch: str):
-    ultimo_error = None
-    for intento in range(4):
-        try:
-            if intento > 0:
-                voz = random.choice(VOCES)
-                print(f"[audio intento {intento+1}] Reintentando con voz: {voz}", flush=True)
-            asyncio.run(_tts(texto, salida, voz, rate, pitch))
-            return
-        except Exception as e:
-            ultimo_error = e
-            espera = 10 * (intento + 1)
-            print(f"[audio intento {intento+1}] Fallo edge-tts: {type(e).__name__}: {e}", flush=True)
-            time.sleep(espera)
-    raise RuntimeError(f"edge-tts fallo tras 4 intentos. Ultimo error: {ultimo_error}")
-
-
-def generar_audio_partes(partes: list, salida: str = "audio_mindblown.mp3"):
-    """Narrador + voz de reaccion: cada parte se genera por separado y se unen en orden."""
-    narrador, reaccion = elegir_par_de_voces()
-    rate_n = f"+{random.randint(8, 18)}%"
-    pitch_n = f"+{random.randint(0, 4)}Hz"
-    print(f"Voces: narrador={narrador} | reaccion={reaccion} | rate: {rate_n} | pitch: {pitch_n}")
-    rutas = []
-    for i, p in enumerate(partes):
-        ruta = f"parte_audio_{i}.mp3"
-        if p["voz"] == "react":
-            _tts_con_reintentos(p["texto"], ruta, reaccion, "+20%", "+6Hz")
-        else:
-            _tts_con_reintentos(p["texto"], ruta, narrador, rate_n, pitch_n)
-        rutas.append(ruta)
-    clips = [AudioFileClip(r) for r in rutas]
-    try:
-        concatenate_audioclips(clips).write_audiofile(salida, logger=None)
-    finally:
-        for c in clips:
-            c.close()
-    return salida
 
 
 def transcribir(audio_path: str):
@@ -1141,13 +1069,9 @@ def main():
     imagenes_ia = generar_imagenes(escenas, categoria)
     clips_por_escena, pool_generico = descargar_clips(escenas, categoria)
     musica_path = descargar_musica()
-    partes = normalizar_partes(contenido)
-    contenido["guion"] = " ".join(p["texto"] for p in partes)  # para la descripcion
-    try:
-        audio_path = generar_audio_partes(partes)
-    except Exception as e:
-        print(f"Aviso: fallo el audio con dos voces ({type(e).__name__}: {e}). Uso una sola voz.", flush=True)
-        audio_path = generar_audio(contenido["guion"])
+    genero = "mujer" if episodio % 2 == 0 else "hombre"  # alterna cada video
+    print(f"Voz de este episodio: {genero}")
+    audio_path = generar_audio(contenido["guion"], genero=genero)
     segmentos = transcribir(audio_path)
     hook_texto = contenido.get("hook", "This sounds fake but it's real.")
 
