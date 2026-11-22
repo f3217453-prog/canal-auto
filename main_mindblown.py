@@ -37,7 +37,10 @@ RESOLUCION = (1080, 1920)
 HF_MODEL = "stabilityai/stable-diffusion-xl-base-1.0"
 MODELOS_GEMINI = ["gemini-3.5-flash", "gemini-3.1-flash-lite"]
 
-DURACION_HOOK = 1.8
+# Datos (vidIQ/YouTube): los primeros 3s deciden 'viewed vs swiped away'.
+# La voz arranca en t=0 (sin silencio); el texto-gancho solo se superpone.
+DURACION_HOOK = 0.0
+DURACION_TEXTO_HOOK = 2.4
 CLIP_MIN, CLIP_MAX = 1.2, 2.5
 
 NEGATIVE_PROMPT = (
@@ -81,7 +84,7 @@ VOLUMEN_MUSICA = 0.20  # antes 0.15 - un poco mas presente sin tapar la voz
 
 CATEGORIAS = {
     "mind_blowing_facts": {
-        "peso": 3,
+        "peso": 2,
         "tags_extra": ["didyouknow", "sciencefacts", "spacefacts", "oceanfacts",
                         "historyfacts", "bodyfacts", "randomfacts", "factsdaily"],
         "temas": [
@@ -105,7 +108,7 @@ CATEGORIAS = {
         "emoji_titulo": "😱",
     },
     "animal_superpowers": {
-        "peso": 3,
+        "peso": 8,
         "tags_extra": ["animalfacts", "wildlife", "animals", "nature",
                         "rareanimals", "animalkingdom", "wildanimals", "biology"],
         "temas": [
@@ -129,7 +132,7 @@ CATEGORIAS = {
         "emoji_titulo": "🦁",
     },
     "human_achievements": {
-        "peso": 3,
+        "peso": 0.5,
         "tags_extra": ["worldrecords", "engineering", "architecture", "records",
                         "extremesports", "humanachievements", "construction", "megastructures"],
         "temas": [
@@ -153,7 +156,7 @@ CATEGORIAS = {
         "emoji_titulo": "🏆",
     },
     "sports_records": {
-        "peso": 3,
+        "peso": 0.5,
         "tags_extra": ["sportsfacts", "sports", "athletes", "olympics",
                         "sportsrecords", "fastest", "strongest", "sportstrivia"],
         "temas": [
@@ -177,7 +180,7 @@ CATEGORIAS = {
         "emoji_titulo": "⚽",
     },
     "guinness_records": {
-        "peso": 3,
+        "peso": 1,
         "tags_extra": ["guinnessworldrecords", "worldrecords", "records",
                         "recordbreaking", "weirdrecords", "biggest", "smallest",
                         "unbelievable"],
@@ -204,7 +207,7 @@ CATEGORIAS = {
         "emoji_titulo": "📜",
     },
     "everyday_curiosities": {
-        "peso": 2,
+        "peso": 0.5,
         "tags_extra": ["funfacts", "foodfacts", "moneyfacts", "techfacts",
                         "languagefacts", "everydayfacts", "factsyoudidntknow", "curiosities"],
         "temas": [
@@ -227,7 +230,7 @@ CATEGORIAS = {
         "emoji_titulo": "🤔",
     },
     "natural_phenomena": {
-        "peso": 1,
+        "peso": 5,
         "tags_extra": ["naturephenomena", "extremeweather", "earthfacts",
                         "naturedocumentary", "weatherfacts", "planetearth"],
         "temas": [
@@ -248,7 +251,7 @@ CATEGORIAS = {
         "emoji_titulo": "🤯",
     },
     "extreme_comparisons": {
-        "peso": 1,
+        "peso": 3,
         "tags_extra": ["comparison", "vs", "extremes", "sidebyside",
                         "worldfacts", "geography", "didyouknowfacts"],
         "temas": [
@@ -278,10 +281,26 @@ CONSULTAS_RESPALDO = [
 # Formatos variables para dar mas ritmo y evitar que todo se sienta igual.
 # Top 5 pesa mas porque suele retener mejor en Shorts (video mas corto y rapido).
 FORMATOS = [
-    {"nombre": "Top 3", "inicio": 3, "palabras": "35-50", "peso": 2},
+    {"nombre": "Top 3", "inicio": 3, "palabras": "35-50", "peso": 5},
     {"nombre": "Top 5", "inicio": 5, "palabras": "55-75", "peso": 4},
-    {"nombre": "Top 10", "inicio": 10, "palabras": "100-130", "peso": 2},
+    {"nombre": "Top 10", "inicio": 10, "palabras": "100-130", "peso": 0.5},
 ]
+
+
+# Angulos de narracion: cambian la ESTRUCTURA del guion entre videos para que
+# no parezcan una misma plantilla (riesgo de 'contenido repetitivo' en YouTube).
+ANGULOS = [
+    "MYTH FLIP: each entry starts with a belief most people hold, then flips it with the real fact.",
+    "SCALE SHOCK: compare each fact to something from everyday life so the viewer feels the size (e.g. 'that's like...').",
+    "WOULD YOU SURVIVE: frame each entry as 'imagine you were there' and what it would do to a human.",
+    "RANKED BY INSANITY: the narrator rates each entry out of 10 on the Insanity Meter, with a quick reason.",
+    "THE UNFAIR ONES: each entry is an example of nature or the world being unfairly extreme, with a wry joke.",
+    "PLOT TWIST: each entry begins like a normal fact, then takes a surprising turn in the last sentence.",
+]
+
+
+def elegir_angulo() -> str:
+    return random.choice(ANGULOS)
 
 
 def elegir_formato() -> dict:
@@ -296,6 +315,14 @@ this style has consistently gotten the most views on this channel.
 Your style is like a fast-paced trivia narrator — calm but enthusiastic, with genuine amazement.
 
 Create a {formato_nombre} countdown about: {tema}
+
+NARRATOR IDENTITY (this is what makes viewers follow the channel, not just the facts):
+- You are "the MindBlown narrator": curious, a bit sarcastic, always amazed.
+- Give your OWN opinion or reaction in every entry (not just the fact) — a joke, a
+  comparison, a "honestly, I can't get over this". This original voice is the product.
+- RECURRING SEGMENT: for entry #1, always end it with the Insanity Meter, e.g.
+  "Insanity Meter: 9 out of 10." (vary the number 7-10). Viewers will wait for it.
+- ANGLE FOR THIS VIDEO (follow it, it changes the structure): {angulo}
 
 HOOK RULES (most critical — determines 70-90% of views):
 - Under 8 words
@@ -319,11 +346,13 @@ COUNTDOWN RULES:
   ("Insane, right? ...") to break the pattern — but don't overuse this, vary it.
 - Build amazement progressively — each entry more incredible than the last
 - Near the middle, add ONE short line of tension like "but wait, it gets crazier..."
+- Entry #1 is a CLIFFHANGER: reveal about 80% of it, build suspense before the final detail.
+- Total spoken length: keep the whole video under ~30 seconds; shorter beats longer.
 - #1: the most jaw-dropping, unbelievable entry — must deliver on the hype
 - Keep it PG — no violence, no gore, family-friendly amazement
 - END the script with ONE short closing line (max 14 words) that does 3 things:
   (1) asks viewers to comment a number ("Comment the number that shocked you most."),
-  (2) gives a reason to subscribe ("Subscribe — tomorrow's number 1 is even crazier."),
+  (2) gives a reason to subscribe by teasing tomorrow's topic ("Follow — tomorrow: the animal that never dies."),
   (3) its LAST 2-4 words must flow naturally back into the hook, so when the
   video replays it feels like one endless loop (e.g. the line ends on an open
   phrase like "...and honestly, this sounds" / "...because this should not be").
@@ -358,23 +387,93 @@ TITLE RULES:
   phrase in every single title
 - Add {emoji} and #Shorts at end
 
-5 filmable scene descriptions for Pexels search (nature, science, animals, structures, sports, everyday life — generic and illustrative, never specific people, brands or logos). Make each one visually distinct from the others (different subject/setting), not variations of the same shot.
+STRUCTURE: write exactly {formato_inicio} entries (numbered {formato_inicio} down to 1), one object each.
+For EACH entry give "escena": a stock-footage search phrase (2-4 words, ENGLISH) that literally
+shows the main subject of THAT entry's fact (e.g. entry about octopus hearts -> "octopus underwater";
+about a sprinter -> "sprinter track slow motion"). The viewer must SEE what the voice is saying.
+Use concrete nouns that exist in stock libraries; never abstract words, brands or named people.
 
 Also provide a short "miniatura" line: 3-5 words in ALL CAPS summarizing the single
 most shocking fact from the whole list (used as bold text on the video thumbnail,
 separate from the hook and title).
 
-STRICT: {formato_palabras} words ENGLISH ONLY in total (countdown {formato_inicio} to 1, reactions and closing line). Every word earns its place.
+STRICT: {formato_palabras} words ENGLISH ONLY in total across all "texto" fields plus "cierre" (reactions included). Every word earns its place.
 
 Return ONLY valid JSON, no markdown, no backticks:
 {{
 "hook": "...(under 8 words, stops scroll instantly)...",
-"guion": "...({formato_palabras} words STRICT countdown {formato_inicio} to 1, plus a short viewer-challenge closing line)...",
-"escenas": ["pexels search phrase 1", "pexels search phrase 2", "pexels search phrase 3", "pexels search phrase 4", "pexels search phrase 5"],
+"entradas": [{{"n": {formato_inicio}, "texto": "...(1-2 punchy sentences, includes the number)...", "escena": "...(2-4 word stock footage phrase showing THIS fact)..."}}, "...continue one object per number down to n=1..."],
+"cierre": "...(closing line, max 14 words: comment a number + tease tomorrow + flows back into the hook)...",
 "titulo": "...(under 40 chars, starts with {formato_nombre} + {emoji} + #Shorts)...",
 "miniatura": "...(3-5 words ALL CAPS, the single most shocking fact)...",
 "tags": ["mindblown", "{formato_tag}", "viral", "shorts", "facts", "soundsfake", "science", "wow", "trivia", "mindblowing"]
 }}"""
+
+
+def normalizar_contenido(c: dict) -> dict:
+    """Construye guion, escenas y proporciones (para sincronizar cada imagen con el
+    momento en que se narra su dato). Si el modelo devuelve el formato antiguo
+    (guion + escenas) se mantiene tal cual, con reparto uniforme."""
+    entradas = [e for e in c.get("entradas", []) if isinstance(e, dict) and e.get("texto")]
+    if entradas:
+        cierre = str(c.get("cierre", "")).strip()
+        partes = [str(e["texto"]).strip() for e in entradas]
+        c["guion"] = " ".join(partes + ([cierre] if cierre else []))
+        c["escenas"] = [str(e.get("escena") or "nature cinematic") for e in entradas]
+        pesos = [len(t.split()) for t in partes]
+        if cierre:
+            pesos[-1] += len(cierre.split())
+        hook_n = len(str(c.get("hook", "")).split())
+        pesos[0] += hook_n  # el gancho se dice antes del primer dato
+        c["proporciones"] = pesos
+    else:
+        c.setdefault("proporciones", None)
+    return c
+
+
+PROMPT_VERIFICAR = """You are a strict fact-checker for a trivia channel.
+Below is a JSON list of entries (each has a fact in "texto" and a stock-footage phrase in "escena").
+For EACH entry decide if every number, name, place and claim is accurate and uncontroversial.
+If an entry has ANY doubtful, exaggerated or unverifiable detail, REPLACE it with a different
+fact on the same topic that you are highly confident is true (keep the same "n", keep the same
+tone, 1-2 punchy sentences, and update "escena" to match the new fact). Keep correct entries
+exactly as they are. Never add words like "reportedly" to hide doubt; replace the fact instead.
+Return ONLY valid JSON, no markdown: {{"entradas": [...same structure...], "cambiadas": <number of entries you replaced>}}
+
+ENTRIES:
+{entradas}"""
+
+
+def verificar_datos(contenido: dict) -> dict:
+    """Segunda pasada: pide a Gemini revisar cada dato y sustituir los dudosos.
+    No es una garantia (el mismo tipo de modelo revisa a otro), pero reduce errores.
+    Si algo falla, devuelve el contenido original sin tocar."""
+    entradas = contenido.get("entradas")
+    if not entradas:
+        return contenido
+    prompt = PROMPT_VERIFICAR.format(entradas=json.dumps(entradas, ensure_ascii=False))
+    body = {"contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 4096}}
+    for modelo in MODELOS_GEMINI:
+        try:
+            url = ("https://generativelanguage.googleapis.com/v1beta/models/"
+                   f"{modelo}:generateContent?key={GEMINI_API_KEY}")
+            r = requests.post(url, json=body, timeout=60)
+            if r.status_code != 200:
+                continue
+            texto = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+            texto = re.sub(r"```json|```", "", texto).strip()
+            res = json.loads(texto)
+            nuevas = [e for e in res.get("entradas", [])
+                      if isinstance(e, dict) and e.get("texto")]
+            if len(nuevas) != len(entradas):
+                continue  # respuesta incompleta: no arriesgar
+            print(f"Verificacion de datos: {res.get('cambiadas', '?')} entradas cambiadas", flush=True)
+            contenido["entradas"] = nuevas
+            return normalizar_contenido(contenido)
+        except Exception as e:
+            print(f"Aviso verificacion ({modelo}): {e}", flush=True)
+    return contenido
 
 
 def generar_contenido() -> tuple:
@@ -389,6 +488,7 @@ def generar_contenido() -> tuple:
 
     prompt = PROMPT_SISTEMA.format(
         tema=tema, emoji=emoji,
+        angulo=elegir_angulo(),
         formato_nombre=formato["nombre"],
         formato_inicio=formato["inicio"],
         formato_palabras=formato["palabras"],
@@ -442,6 +542,8 @@ def generar_contenido() -> tuple:
                     continue
                 print(f"Categoria: {categoria_key} | Tema: {tema}", flush=True)
                 print(f"Hook: {contenido.get('hook', '')}", flush=True)
+                contenido = normalizar_contenido(contenido)
+                contenido = verificar_datos(contenido)
                 return contenido, categoria
             except Exception as e:
                 print(f"[{modelo} intento {intento+1}] Excepcion: {type(e).__name__}: {e}", flush=True)
@@ -464,10 +566,14 @@ def generar_imagen_ia(prompt: str, indice: int, carpeta: str = "imagenes_mindblo
         }
     }
     try:
-        r = requests.post(
-            f"https://api-inference.huggingface.co/models/{HF_MODEL}",
-            headers=headers, json=payload, timeout=90
-        )
+        r = None
+        for base in ("https://router.huggingface.co/hf-inference/models",
+                     "https://api-inference.huggingface.co/models"):
+            r = requests.post(f"{base}/{HF_MODEL}", headers=headers,
+                              json=payload, timeout=90)
+            if r.status_code == 200:
+                break
+            print(f"Aviso HF {base}: HTTP {r.status_code}")
         r.raise_for_status()
         imagen = Image.open(io.BytesIO(r.content))
         imagen = imagen.resize(RESOLUCION, Image.LANCZOS)
@@ -761,7 +867,7 @@ def crear_texto(texto, fontsize, color, stroke_color="black", stroke_width=2, an
 
 def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
                  segmentos, hook_texto, musica_path, categoria,
-                 salida="video_mindblown.mp4"):
+                 salida="video_mindblown.mp4", proporciones=None, episodio=None):
     audio_voz = AudioFileClip(audio_path)
     duracion_total = audio_voz.duration
     duracion_video = duracion_total + DURACION_HOOK
@@ -769,11 +875,21 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
 
     n_escenas = max(len(clips_por_escena), 1)
     dur_por_escena = duracion_total / n_escenas
+    # Limites de cada escena segun cuantas palabras tiene su dato: cada imagen
+    # aparece cuando la voz habla de ESE dato (antes: reparto uniforme).
+    if proporciones and len(proporciones) == n_escenas and sum(proporciones) > 0:
+        total_p = float(sum(proporciones))
+        limites, acum = [], 0.0
+        for pw in proporciones:
+            acum += pw
+            limites.append(duracion_total * acum / total_p)
+    else:
+        limites = [(k + 1) * dur_por_escena for k in range(n_escenas)]
     clips_finales = []
     tiempo_acumulado = 0.0
 
     for i in range(n_escenas):
-        limite_tramo = (i + 1) * dur_por_escena
+        limite_tramo = limites[i]
         clips_escena = list(clips_por_escena[i]) if i < len(clips_por_escena) else []
         random.shuffle(clips_escena)
 
@@ -841,18 +957,18 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
     import numpy as np
     overlay = (
         ImageClip(np.zeros((RESOLUCION[1], RESOLUCION[0], 3), dtype=np.uint8))
-        .set_opacity(0.55)
+        .set_opacity(0.25)
         .set_start(0)
-        .set_end(DURACION_HOOK)
+        .set_end(DURACION_TEXTO_HOOK)
     )
 
     hook_clip = crear_texto(
         hook_texto.upper(), 78, "white", color_sub, 4, RESOLUCION[0]-80
-    ).set_start(0).set_end(DURACION_HOOK).set_position("center")
+    ).set_start(0).set_end(DURACION_TEXTO_HOOK).set_position(("center", 0.40), relative=True)
     subtitulos.append(hook_clip)
 
-    badge = crear_texto("MINDBLOWN", 45, color_sub, "black", 2
-    ).set_start(0).set_end(DURACION_HOOK).set_position(("center", 0.22), relative=True)
+    badge = crear_texto(f"MINDBLOWN #{episodio}" if episodio else "MINDBLOWN", 45, color_sub, "black", 2
+    ).set_start(0).set_end(DURACION_TEXTO_HOOK).set_position(("center", 0.28), relative=True)
     subtitulos.append(badge)
 
     PALABRAS_CLAVE = {
@@ -920,9 +1036,9 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
     # Aviso corto a mitad del video: refuerza la retencion ("espera al #1") y
     # recuerda seguir el canal justo cuando el espectador esta enganchado.
     if duracion_video > 12:
-        t_mid = duracion_video * 0.45
+        t_mid = min(18.0, duracion_video * 0.5)  # CTA hablado/escrito ~20s: muchos se van antes del final
         mid_clip = crear_texto(
-            "FOLLOW FOR MORE - #1 IS INSANE", 52, "white", color_sub, 3,
+            "FOLLOW: NEW WILD #1 EVERY DAY", 52, "white", color_sub, 3,
             RESOLUCION[0]-160
         ).set_start(t_mid).set_end(t_mid + 2.2).set_position(
             ("center", 0.10), relative=True
@@ -1071,20 +1187,35 @@ def main():
     musica_path = descargar_musica()
     genero = "mujer" if episodio % 2 == 0 else "hombre"  # alterna cada video
     print(f"Voz de este episodio: {genero}")
-    audio_path = generar_audio(contenido["guion"], genero=genero)
+    guion_hablado = contenido["guion"].strip()
+    hook_h = contenido.get("hook", "").strip()
+    # El gancho se dice en voz alta en el segundo 0 (antes era 1.8s de silencio).
+    if hook_h and not guion_hablado.lower().startswith(hook_h.lower()[:20]):
+        guion_hablado = f"{hook_h} {guion_hablado}"
+    audio_path = generar_audio(guion_hablado, genero=genero)
     segmentos = transcribir(audio_path)
     hook_texto = contenido.get("hook", "This sounds fake but it's real.")
 
     video_path = armar_video(
         clips_por_escena, pool_generico, imagenes_ia,
-        audio_path, segmentos, hook_texto, musica_path, categoria
+        audio_path, segmentos, hook_texto, musica_path, categoria,
+        proporciones=contenido.get("proporciones"), episodio=episodio
     )
 
     miniatura_path = None
     texto_miniatura = contenido.get("miniatura", "")
-    if texto_miniatura and imagenes_ia:
+    base_mini = imagenes_ia[0] if imagenes_ia else None
+    if texto_miniatura and not base_mini:
+        # Sin imagenes IA (p. ej. HF falla): usar un fotograma del propio video.
+        try:
+            with VideoFileClip(video_path) as vc:
+                vc.save_frame("frame_mini.png", t=min(1.0, vc.duration / 2))
+            base_mini = "frame_mini.png"
+        except Exception as e:
+            print(f"Aviso fotograma miniatura: {e}")
+    if texto_miniatura and base_mini:
         miniatura_path = generar_miniatura(
-            imagenes_ia[0], texto_miniatura, categoria["color_sub"]
+            base_mini, texto_miniatura, categoria["color_sub"]
         )
 
     titulo_base = contenido.get("titulo", "10 Facts That Sound Fake 😱 #Shorts")
@@ -1102,10 +1233,10 @@ def main():
     tags_categoria = categoria.get("tags_extra", [])
     tags_combinados = list(dict.fromkeys(
         contenido.get("tags", []) + tags_categoria + [
-            "mindblown", "top10", "top5", "viral", "shorts", "facts",
+            "mindblown", "viral", "shorts", "facts",
             "soundsfake", "incredible", "science", "amazing",
-            "wow", "satisfying", "nature", "records", "comparison",
-            "didyouknow", "mindblowingfacts", "trivia", "factchecked",
+            "wow", "nature", "records", "comparison",
+            "didyouknow", "mindblowingfacts", "trivia",
         ]
     ))
     tags = []
