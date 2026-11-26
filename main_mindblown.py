@@ -300,6 +300,12 @@ ANGULOS = [
 ]
 
 
+def obtener_tendencias() -> str:
+    """Tendencias de HOY, todo automatico: 1) API de YouTube (vistas/hora) si hay
+    YOUTUBE_API_KEY; 2) si no hay clave o falla, Gemini con busqueda de Google."""
+    return obtener_tendencias_youtube() or obtener_tendencias_gemini()
+
+
 CONSULTAS_TENDENCIA = [
     "curiosidades animales", "datos curiosos", "naturaleza increible", "animales extremos",
     "fenomenos naturales", "sabias que", "records increibles", "ciencia curiosidades",
@@ -336,7 +342,62 @@ def _fuentes_usadas() -> set:
     return usadas
 
 
-def obtener_tendencias() -> str:
+def obtener_tendencias_gemini() -> str:
+    """Plan automatico SIN clave extra: Gemini con busqueda de Google (grounding)
+    encuentra de que se habla HOY en espanol (animales, ciencia, naturaleza, records)
+    y devuelve datos con cifras que luego pasan por la verificacion. Solo usa la
+    GEMINI_API_KEY que ya tienes. Si el plan gratuito no incluye busqueda: cadena vacia."""
+    hoy = datetime.date.today().isoformat()
+    prompt = (
+        f"Today is {hoy}. Using Google Search, find 5 topics that are trending TODAY or this week "
+        "in Spanish-speaking countries (YouTube, TikTok, news, social media) and that are about "
+        "animals, nature, science, space, the ocean, the human body or world records. Skip politics, "
+        "celebrities, tragedies, crimes and health advice. For each topic give: a Spanish title as "
+        "people see it, an English topic line, and 2-3 verifiable facts with numbers taken from "
+        "reliable sources. Return ONLY a JSON list, no markdown: "
+        '[{"titulo_es": "...", "topic_en": "...", "hechos": ["...", "..."]}]'
+    )
+    body = {"contents": [{"parts": [{"text": prompt}]}],
+            "tools": [{"google_search": {}}],
+            "generationConfig": {"temperature": 0.3, "maxOutputTokens": 4096}}
+    for modelo in MODELOS_GEMINI:
+        try:
+            url = ("https://generativelanguage.googleapis.com/v1beta/models/"
+                   f"{modelo}:generateContent?key={GEMINI_API_KEY}")
+            r = requests.post(url, json=body, timeout=90)
+            if r.status_code != 200:
+                print(f"Aviso tendencias Gemini ({modelo}): HTTP {r.status_code}", flush=True)
+                continue
+            texto = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+            m = re.search(r"\[.*\]", texto, re.S)
+            items = json.loads(m.group(0)) if m else []
+            usadas = _fuentes_usadas()
+            items = [i for i in items if isinstance(i, dict) and i.get("titulo_es")
+                     and i["titulo_es"].strip().lower() not in usadas][:5]
+            if not items:
+                continue
+            META["tendencias_es"] = [i["titulo_es"] for i in items]
+            print("Tendencias (Gemini+Google): " + " | ".join(META["tendencias_es"]), flush=True)
+            bloques = []
+            for i in items:
+                hechos = "; ".join(str(h) for h in i.get("hechos", [])[:3])
+                bloques.append(f"- {i['titulo_es']} | topic: {i.get('topic_en', '')} | facts found: {hechos}")
+            return ("TODAY'S TRENDING TOPICS IN SPANISH (found with Google Search; facts need your own"
+                    " double-check):\n" + "\n".join(bloques) +
+                    "\nPick ONE that is a verifiable subject for this channel (animals, nature, science,"
+                    " records, the human body, space, the ocean); it REPLACES the topic above. Write an"
+                    " ORIGINAL English script in your own words and structure; never copy any video or"
+                    " article. Use only facts you are confident about. VIRAL FORMULA: apply the psychological"
+                    " pattern that makes people stop (curiosity gap, shocking number, direct question,"
+                    " strong emotion); the first 2 seconds must open a question the viewer needs answered."
+                    " In the JSON, set \"tendencia_usada\" to the EXACT Spanish title you based it on,"
+                    " or \"\" if you used none.\n")
+        except Exception as e:
+            print(f"Aviso tendencias Gemini ({modelo}): {e}", flush=True)
+    return ""
+
+
+def obtener_tendencias_youtube() -> str:
     """Shorts en espanol que MAS rapido ganan vistas en las ultimas ~36 horas
     (vistas por hora, no vistas totales, para captar lo que es viral HOY).
     Requiere YOUTUBE_API_KEY (gratis). Coste: 3 busquedas (~300) + 1 consulta de
@@ -394,7 +455,12 @@ def obtener_tendencias() -> str:
                 " original video; write your own English script from what you reliably know, with your"
                 " own wording, examples and structure. SKIP anything about politics, celebrities or real"
                 " private people, tragedies, crimes, health advice, or anything you cannot verify. If none"
-                " fits, ignore this list. In the JSON, set \"tendencia_usada\" to the EXACT Spanish title"
+                " fits, ignore this list. VIRAL FORMULA: before writing, study WHY these titles make people stop"
+                " (curiosity gap, a shocking number, an extreme superlative, a direct question, a"
+                " forbidden-sounding promise, high emotion) and apply the SAME psychological pattern to"
+                " your English hook, title and thumbnail text, in your own words. The first 2 seconds"
+                " must create a question the viewer needs answered; never give away the answer early."
+                " In the JSON, set \"tendencia_usada\" to the EXACT Spanish title"
                 " you based it on, or \"\" if you used none.\n")
     except Exception as e:
         print(f"Aviso tendencias: {e}", flush=True)
@@ -593,13 +659,27 @@ def generar_contenido() -> tuple:
     tema = random.choice(categoria["temas"])
     emoji = categoria["emoji_titulo"]
     formato = elegir_formato()
+
+    # Ejecucion manual con tema elegido a mano (workflow_dispatch -> TEMA_MANUAL).
+    # TEMA_DATOS (opcional): datos ya verificados que el guion DEBE usar.
+    tema_manual = os.environ.get("TEMA_MANUAL", "").strip()
+    datos_manual = os.environ.get("TEMA_DATOS", "").strip()
+    if tema_manual:
+        tema = tema_manual
+        formato = next(f for f in FORMATOS if f["nombre"] == "Top 3")
+        META["tema_manual"] = True
+        print(f"TEMA MANUAL: {tema}", flush=True)
     print(f"Formato: {formato['nombre']}")
     META.update({"formato": formato["nombre"], "categoria": categoria_key, "tema": tema})
 
     prompt = PROMPT_SISTEMA.format(
         tema=tema, emoji=emoji,
         angulo=elegir_angulo(),
-        inspiracion=obtener_tendencias(),
+        inspiracion=(
+            ("VERIFIED FACTS PROVIDED BY THE EDITOR (use ONLY these facts, do not invent any other"
+             " number or claim; rephrase them in your own words):\n" + datos_manual + "\n")
+            if (tema_manual and datos_manual) else ("" if tema_manual else obtener_tendencias())
+        ),
         formato_nombre=formato["nombre"],
         formato_inicio=formato["inicio"],
         formato_palabras=formato["palabras"],
@@ -697,15 +777,19 @@ def generar_imagen_ia(prompt: str, indice: int, carpeta: str = "imagenes_mindblo
 
 
 def generar_imagenes(escenas: list, categoria: dict) -> list:
-    # Antes solo generaba 3 imagenes (una por escena al inicio). Ahora hasta 5,
-    # para que aparezcan mas seguido a lo largo del video en vez de depender
-    # tanto del stock de Pexels, que tiende a repetirse entre videos.
-    return [
-        ruta for i, escena in enumerate(escenas[:5])
-        if (ruta := generar_imagen_ia(
+    """Hasta 5 imagenes IA. Si la primera falla (token sin permisos, modelo no
+    disponible...) se corta: reintentar las demas solo gasta minutos de Actions."""
+    rutas = []
+    for i, escena in enumerate(escenas[:5]):
+        ruta = generar_imagen_ia(
             f"{escena}, cinematic dramatic, highly detailed, trending quality", i
-        ))
-    ]
+        )
+        if ruta:
+            rutas.append(ruta)
+        elif not rutas:
+            print("Hugging Face no responde: se omiten las imagenes IA de este video.", flush=True)
+            break
+    return rutas
 
 
 def generar_miniatura(imagen_base: str, texto: str, color_sub: str,
