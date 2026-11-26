@@ -6,6 +6,7 @@ Todo con material libre de derechos de Pexels.
 Sin copyright, alta viralidad, formato entretenido.
 """
 import os
+import datetime
 import io
 import re
 import time
@@ -299,8 +300,114 @@ ANGULOS = [
 ]
 
 
+CONSULTAS_TENDENCIA = [
+    "curiosidades animales", "datos curiosos", "naturaleza increible", "animales extremos",
+    "fenomenos naturales", "sabias que", "records increibles", "ciencia curiosidades",
+    "animales que no sabias", "el mar profundo",
+]
+
+
+def _fuentes_usadas() -> set:
+    """Titulos en espanol ya usados como inspiracion (leidos del registro del repo)."""
+    usadas = set()
+    lineas = []
+    try:
+        repo = os.environ.get("GITHUB_REPOSITORY", "")
+        token = os.environ.get("GH_TOKEN", "")
+        if repo and token:
+            r = requests.get(f"https://api.github.com/repos/{repo}/contents/registro_videos.jsonl",
+                             headers={"Authorization": f"token {token}"}, timeout=15)
+            if r.status_code == 200:
+                lineas += base64.b64decode(r.json()["content"]).decode().splitlines()
+    except Exception:
+        pass
+    try:
+        with open("registro_videos.jsonl", encoding="utf-8") as f:
+            lineas += f.read().splitlines()
+    except Exception:
+        pass
+    for l in lineas:
+        try:
+            f = json.loads(l).get("fuente_es")
+            if f:
+                usadas.add(f.strip().lower())
+        except Exception:
+            continue
+    return usadas
+
+
+def obtener_tendencias() -> str:
+    """Shorts en espanol que MAS rapido ganan vistas en las ultimas ~36 horas
+    (vistas por hora, no vistas totales, para captar lo que es viral HOY).
+    Requiere YOUTUBE_API_KEY (gratis). Coste: 3 busquedas (~300) + 1 consulta de
+    estadisticas (1 unidad) de 10.000 diarias. Se usan solo para elegir el TEMA:
+    el guion se escribe original en ingles. Sin clave o si falla: cadena vacia."""
+    clave = os.environ.get("YOUTUBE_API_KEY", "").strip()
+    if not clave:
+        return ""
+    try:
+        ahora = datetime.datetime.utcnow()
+        desde = (ahora - datetime.timedelta(hours=36)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        ids, vistos = [], set()
+        for consulta in random.sample(CONSULTAS_TENDENCIA, 3):
+            r = requests.get(
+                "https://www.googleapis.com/youtube/v3/search",
+                params={"part": "snippet", "type": "video", "videoDuration": "short",
+                        "order": "viewCount", "publishedAfter": desde, "maxResults": 15,
+                        "q": consulta, "relevanceLanguage": "es",
+                        "regionCode": random.choice(["ES", "MX", "AR", "CO", "US"]),
+                        "key": clave}, timeout=30)
+            r.raise_for_status()
+            for it in r.json().get("items", []):
+                vid = it["id"]["videoId"]
+                if vid not in vistos:
+                    vistos.add(vid)
+                    ids.append(vid)
+        if not ids:
+            return ""
+        r = requests.get(
+            "https://www.googleapis.com/youtube/v3/videos",
+            params={"part": "statistics,snippet", "id": ",".join(ids[:50]), "key": clave},
+            timeout=30)
+        r.raise_for_status()
+        usadas = _fuentes_usadas()
+        candidatos = []
+        for it in r.json().get("items", []):
+            titulo = it["snippet"]["title"].strip()
+            if titulo.lower() in usadas:
+                continue
+            vistas = int(it.get("statistics", {}).get("viewCount", 0))
+            pub = datetime.datetime.strptime(it["snippet"]["publishedAt"][:19], "%Y-%m-%dT%H:%M:%S")
+            horas = max((ahora - pub).total_seconds() / 3600, 1.0)
+            candidatos.append((vistas / horas, vistas, titulo))
+        candidatos.sort(reverse=True)
+        top = candidatos[:6]
+        if not top:
+            return ""
+        META["tendencias_es"] = [t[2] for t in top]
+        print("Tendencias ES (vistas/hora): " + " | ".join(f"{t[2]} ({t[0]:.0f}/h)" for t in top), flush=True)
+        lista = "\n".join(f"- {t[2]}  (~{t[0]:.0f} views/hour)" for t in top)
+        return ("TODAY'S VIRAL SPANISH SHORTS (titles only, fastest-growing in the last 36h):\n" + lista +
+                "\nIf ONE of them is about a verifiable subject that fits this channel (animals, nature,"
+                " science, records, the human body, space, the ocean), BASE this video on that SUBJECT"
+                " and it REPLACES the topic above. Rules: never translate or imitate the title or the"
+                " original video; write your own English script from what you reliably know, with your"
+                " own wording, examples and structure. SKIP anything about politics, celebrities or real"
+                " private people, tragedies, crimes, health advice, or anything you cannot verify. If none"
+                " fits, ignore this list. In the JSON, set \"tendencia_usada\" to the EXACT Spanish title"
+                " you based it on, or \"\" if you used none.\n")
+    except Exception as e:
+        print(f"Aviso tendencias: {e}", flush=True)
+        return ""
+
+
+META = {}  # datos del video actual para el registro (tema, formato, angulo, voz...)
+
+
 def elegir_angulo() -> str:
-    return random.choice(ANGULOS)
+    a = random.choice(ANGULOS)
+    META["angulo"] = a.split(":")[0]
+    return a
 
 
 def elegir_formato() -> dict:
@@ -323,6 +430,7 @@ NARRATOR IDENTITY (this is what makes viewers follow the channel, not just the f
 - RECURRING SEGMENT: for entry #1, always end it with the Insanity Meter, e.g.
   "Insanity Meter: 9 out of 10." (vary the number 7-10). Viewers will wait for it.
 - ANGLE FOR THIS VIDEO (follow it, it changes the structure): {angulo}
+{inspiracion}
 
 HOOK RULES (most critical — determines 70-90% of views):
 - Under 8 words
@@ -406,6 +514,7 @@ Return ONLY valid JSON, no markdown, no backticks:
 "cierre": "...(closing line, max 14 words: comment a number + tease tomorrow + flows back into the hook)...",
 "titulo": "...(under 40 chars, starts with {formato_nombre} + {emoji} + #Shorts)...",
 "miniatura": "...(3-5 words ALL CAPS, the single most shocking fact)...",
+"tendencia_usada": "...(exact Spanish trend title you based this on, or empty string)...",
 "tags": ["mindblown", "{formato_tag}", "viral", "shorts", "facts", "soundsfake", "science", "wow", "trivia", "mindblowing"]
 }}"""
 
@@ -485,10 +594,12 @@ def generar_contenido() -> tuple:
     emoji = categoria["emoji_titulo"]
     formato = elegir_formato()
     print(f"Formato: {formato['nombre']}")
+    META.update({"formato": formato["nombre"], "categoria": categoria_key, "tema": tema})
 
     prompt = PROMPT_SISTEMA.format(
         tema=tema, emoji=emoji,
         angulo=elegir_angulo(),
+        inspiracion=obtener_tendencias(),
         formato_nombre=formato["nombre"],
         formato_inicio=formato["inicio"],
         formato_palabras=formato["palabras"],
@@ -544,6 +655,7 @@ def generar_contenido() -> tuple:
                 print(f"Hook: {contenido.get('hook', '')}", flush=True)
                 contenido = normalizar_contenido(contenido)
                 contenido = verificar_datos(contenido)
+                META["fuente_es"] = str(contenido.get("tendencia_usada", "")).strip()
                 return contenido, categoria
             except Exception as e:
                 print(f"[{modelo} intento {intento+1}] Excepcion: {type(e).__name__}: {e}", flush=True)
@@ -1056,11 +1168,18 @@ def armar_video(clips_por_escena, pool_generico, imagenes_ia, audio_path,
     return salida
 
 
+def _contador_respaldo() -> int:
+    """Si GitHub falla: numero basado en la fecha (crece cada dia) en vez de repetir #1."""
+    base = datetime.date(2026, 1, 1)
+    return max(1, (datetime.date.today() - base).days)
+
+
 def leer_contador() -> int:
     repo = os.environ.get("GITHUB_REPOSITORY", "")
     token = os.environ.get("GH_TOKEN", "")
     if not repo or not token:
-        return 1
+        print("Aviso contador: faltan GITHUB_REPOSITORY/GH_TOKEN; uso numero por fecha", flush=True)
+        return _contador_respaldo()
     try:
         r = requests.get(
             f"https://api.github.com/repos/{repo}/contents/contador.txt",
@@ -1069,28 +1188,56 @@ def leer_contador() -> int:
         if r.status_code == 200:
             contenido = base64.b64decode(r.json()["content"]).decode().strip()
             return int(contenido)
+        print(f"Aviso contador (lectura): HTTP {r.status_code}; uso numero por fecha", flush=True)
     except Exception as e:
-        print(f"Aviso contador (lectura): {e}")
-    return 1
+        print(f"Aviso contador (lectura): {e}; uso numero por fecha", flush=True)
+    return _contador_respaldo()
 
 
-def actualizar_contador(numero: int):
+def _github_put(ruta: str, contenido_texto: str, mensaje: str, anexar: bool = False) -> bool:
+    """Crea/actualiza un archivo del repo. Con anexar=True agrega al final."""
     repo = os.environ.get("GITHUB_REPOSITORY", "")
     token = os.environ.get("GH_TOKEN", "")
     if not repo or not token:
-        return
+        return False
     try:
-        url = f"https://api.github.com/repos/{repo}/contents/contador.txt"
+        url = f"https://api.github.com/repos/{repo}/contents/{ruta}"
         headers = {"Authorization": f"token {token}"}
         r = requests.get(url, headers=headers, timeout=15)
-        sha = r.json().get("sha") if r.status_code == 200 else None
-        contenido_b64 = base64.b64encode(str(numero).encode()).decode()
-        body = {"message": f"Actualizar contador a {numero}", "content": contenido_b64}
+        sha, previo = None, ""
+        if r.status_code == 200:
+            sha = r.json().get("sha")
+            if anexar:
+                previo = base64.b64decode(r.json()["content"]).decode()
+        texto = previo + contenido_texto
+        body = {"message": mensaje,
+                "content": base64.b64encode(texto.encode()).decode()}
         if sha:
             body["sha"] = sha
-        requests.put(url, headers=headers, json=body, timeout=15)
+        w = requests.put(url, headers=headers, json=body, timeout=15)
+        if w.status_code not in (200, 201):
+            print(f"Aviso GitHub {ruta}: HTTP {w.status_code} {w.text[:120]}", flush=True)
+            return False
+        return True
     except Exception as e:
-        print(f"Aviso contador (escritura): {e}")
+        print(f"Aviso GitHub {ruta}: {e}", flush=True)
+        return False
+
+
+def actualizar_contador(numero: int):
+    _github_put("contador.txt", str(numero), f"Actualizar contador a {numero}")
+
+
+def registrar_video(datos: dict):
+    """Una linea JSON por video en registro_videos.jsonl (en el repo), para poder
+    comparar luego que tema/formato/angulo/voz funciona mejor segun YouTube Studio."""
+    linea = json.dumps(datos, ensure_ascii=False) + "\n"
+    try:
+        with open("registro_videos.jsonl", "a", encoding="utf-8") as f:
+            f.write(linea)
+    except Exception:
+        pass
+    _github_put("registro_videos.jsonl", linea, f"Registro video #{datos.get('episodio')}", anexar=True)
 
 
 HISTORIAL_MAX = 400  # cuantos IDs de clips recientes recordar, para no repetir
@@ -1138,27 +1285,73 @@ def actualizar_historial_clips(ids_usados_nuevos: set, ids_previos: set):
         print(f"Aviso historial (escritura): {e}")
 
 
-def subir_youtube(video_path, titulo, descripcion, tags, miniatura_path=None):
+def validar_video(video_path: str, audio_path: str = None):
+    """Controles minimos ANTES de publicar. Lanza RuntimeError si algo esta mal."""
+    if not os.path.exists(video_path):
+        raise RuntimeError("El video no existe")
+    tam = os.path.getsize(video_path)
+    if tam < 300_000:
+        raise RuntimeError(f"Video demasiado pequeno ({tam} bytes)")
+    if tam > 250_000_000:
+        raise RuntimeError(f"Video demasiado grande ({tam} bytes)")
+    with VideoFileClip(video_path) as v:
+        dur = v.duration
+        tiene_audio = v.audio is not None
+        ancho, alto = v.w, v.h
+    if not (8 <= dur <= 70):
+        raise RuntimeError(f"Duracion fuera de rango para un Short: {dur:.1f}s")
+    if not tiene_audio:
+        raise RuntimeError("El video no tiene audio")
+    if alto <= ancho:
+        raise RuntimeError(f"El video no es vertical: {ancho}x{alto}")
+    print(f"Validacion OK: {dur:.1f}s, {ancho}x{alto}, {tam/1e6:.1f} MB", flush=True)
+    return dur
+
+
+def subir_youtube(video_path, titulo, descripcion, tags, miniatura_path=None,
+                  sintetico=False):
     creds = Credentials(
         token=None, refresh_token=YOUTUBE_REFRESH_TOKEN,
         client_id=YOUTUBE_CLIENT_ID, client_secret=YOUTUBE_CLIENT_SECRET,
         token_uri="https://oauth2.googleapis.com/token",
     )
     youtube = build("youtube", "v3", credentials=creds)
-    request = youtube.videos().insert(
-        part="snippet,status",
-        body={
-            "snippet": {
-                "title": titulo[:100],
-                "description": descripcion[:5000],
-                "tags": tags,
-                "categoryId": "24",
-            },
-            "status": {"privacyStatus": "public"},
-        },
-        media_body=MediaFileUpload(video_path, chunksize=-1, resumable=True)
-    )
-    respuesta = request.execute()
+
+    def _body(con_sintetico):
+        status = {"privacyStatus": "public", "selfDeclaredMadeForKids": False}
+        if con_sintetico:
+            status["containsSyntheticMedia"] = True  # imagenes de IA realistas
+        return {
+            "snippet": {"title": titulo[:100], "description": descripcion[:5000],
+                        "tags": tags, "categoryId": "24"},
+            "status": status,
+        }
+
+    con_sintetico = bool(sintetico)
+    respuesta, ultimo_error = None, None
+    for intento in range(4):
+        try:
+            request = youtube.videos().insert(
+                part="snippet,status", body=_body(con_sintetico),
+                media_body=MediaFileUpload(video_path, chunksize=-1, resumable=True)
+            )
+            respuesta = request.execute()
+            break
+        except Exception as e:
+            ultimo_error = e
+            texto = str(e)
+            print(f"[subida intento {intento+1}] {type(e).__name__}: {texto[:300]}", flush=True)
+            # Si la API rechaza el campo de contenido sintetico, reintenta sin el.
+            if con_sintetico and "containsSyntheticMedia" in texto:
+                con_sintetico = False
+                continue
+            # Errores que no se arreglan reintentando (cuota, credenciales).
+            if any(k in texto for k in ("quotaExceeded", "invalid_grant", "forbidden", "uploadLimitExceeded")):
+                break
+            time.sleep(15 * (intento + 1))
+    if not respuesta:
+        raise RuntimeError(f"La subida a YouTube fallo: {ultimo_error}")
+
     video_id = respuesta.get("id")
     print("Subido:", video_id)
 
@@ -1184,9 +1377,16 @@ def main():
     escenas = contenido.get("escenas", [])
     imagenes_ia = generar_imagenes(escenas, categoria)
     clips_por_escena, pool_generico = descargar_clips(escenas, categoria)
+    n_clips = sum(len(c) for c in clips_por_escena) + len(pool_generico)
+    print(f"RESUMEN VISUALES: imagenes IA={len(imagenes_ia)} | clips Pexels={n_clips}", flush=True)
+    if not imagenes_ia:
+        print("ATENCION: 0 imagenes de IA (revisa HF_TOKEN / modelo de Hugging Face).", flush=True)
+    if n_clips == 0 and not imagenes_ia:
+        raise RuntimeError("Sin clips ni imagenes: no se puede armar el video")
     musica_path = descargar_musica()
     genero = "mujer" if episodio % 2 == 0 else "hombre"  # alterna cada video
     print(f"Voz de este episodio: {genero}")
+    META["voz"] = genero
     guion_hablado = contenido["guion"].strip()
     hook_h = contenido.get("hook", "").strip()
     # El gancho se dice en voz alta en el segundo 0 (antes era 1.8s de silencio).
@@ -1255,8 +1455,16 @@ def main():
         + (f"{nota}\n\n" if nota else "")
         + f"{' '.join(hashtags_finales)}"
     )
-    subir_youtube(video_path, titulo, descripcion, tags, miniatura_path)
+    duracion = validar_video(video_path, audio_path)  # si falla, NO se publica
+    video_id = subir_youtube(video_path, titulo, descripcion, tags, miniatura_path,
+                             sintetico=bool(imagenes_ia))
     actualizar_contador(episodio + 1)
+    registrar_video({
+        "episodio": episodio, "fecha": datetime.datetime.utcnow().isoformat(timespec="seconds"),
+        "video_id": video_id, "titulo": titulo, "duracion_s": round(duracion, 1),
+        "imagenes_ia": len(imagenes_ia), "clips": n_clips,
+        "palabras": len(contenido["guion"].split()), **META,
+    })
 
 
 if __name__ == "__main__":
