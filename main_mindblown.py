@@ -282,9 +282,9 @@ CONSULTAS_RESPALDO = [
 # Formatos variables para dar mas ritmo y evitar que todo se sienta igual.
 # Top 5 pesa mas porque suele retener mejor en Shorts (video mas corto y rapido).
 FORMATOS = [
-    {"nombre": "Top 3", "inicio": 3, "palabras": "35-50", "peso": 5},
-    {"nombre": "Top 5", "inicio": 5, "palabras": "55-75", "peso": 4},
-    {"nombre": "Top 10", "inicio": 10, "palabras": "100-130", "peso": 0.5},
+    {"nombre": "Top 3", "inicio": 3, "palabras": "30-42", "peso": 6},
+    {"nombre": "Top 5", "inicio": 5, "palabras": "45-58", "peso": 3},
+    {"nombre": "Top 10", "inicio": 10, "palabras": "100-130", "peso": 0},
 ]
 
 
@@ -303,7 +303,15 @@ ANGULOS = [
 def obtener_tendencias() -> str:
     """Tendencias de HOY, todo automatico: 1) API de YouTube (vistas/hora) si hay
     YOUTUBE_API_KEY; 2) si no hay clave o falla, Gemini con busqueda de Google."""
-    return obtener_tendencias_youtube() or obtener_tendencias_gemini()
+    for nombre, fn in (("youtube", obtener_tendencias_youtube),
+                       ("wikipedia", obtener_tendencias_wikipedia),
+                       ("gemini", obtener_tendencias_gemini)):
+        texto = fn()
+        if texto:
+            META["tend_fuente"] = nombre
+            return texto
+    META["tend_fuente"] = "ninguna"
+    return ""
 
 
 CONSULTAS_TENDENCIA = [
@@ -313,9 +321,8 @@ CONSULTAS_TENDENCIA = [
 ]
 
 
-def _fuentes_usadas() -> set:
-    """Titulos en espanol ya usados como inspiracion (leidos del registro del repo)."""
-    usadas = set()
+def _leer_registro() -> list:
+    """Registros de videos anteriores (repo de GitHub + copia local)."""
     lineas = []
     try:
         repo = os.environ.get("GITHUB_REPOSITORY", "")
@@ -327,19 +334,95 @@ def _fuentes_usadas() -> set:
                 lineas += base64.b64decode(r.json()["content"]).decode().splitlines()
     except Exception:
         pass
-    try:
-        with open("registro_videos.jsonl", encoding="utf-8") as f:
-            lineas += f.read().splitlines()
-    except Exception:
-        pass
+    if not lineas:
+        try:
+            with open("registro_videos.jsonl", encoding="utf-8") as f:
+                lineas = f.read().splitlines()
+        except Exception:
+            pass
+    out = []
     for l in lineas:
         try:
-            f = json.loads(l).get("fuente_es")
-            if f:
-                usadas.add(f.strip().lower())
+            out.append(json.loads(l))
         except Exception:
             continue
-    return usadas
+    return out
+
+
+def _fuentes_usadas() -> set:
+    """Titulos en espanol ya usados como inspiracion."""
+    return {str(d.get("fuente_es", "")).strip().lower() for d in _leer_registro() if d.get("fuente_es")}
+
+
+def _bloque_recientes(n: int = 14) -> str:
+    """Pide a Gemini no repetir los temas de los ultimos videos (antes salian dos
+    videos casi identicos seguidos, p. ej. 'Impossible Animal Senses' x2)."""
+    titulos = [str(d.get("titulo", "")) for d in _leer_registro()[-n:] if d.get("titulo")]
+    if not titulos:
+        return ""
+    lista = "\n".join(f"- {t}" for t in titulos)
+    return ("ALREADY PUBLISHED RECENTLY (do NOT repeat these subjects or animals; pick something"
+            " clearly different):\n" + lista + "\n")
+
+
+def obtener_tendencias_wikipedia() -> str:
+    """Temas que MAS visita la gente en Wikipedia en espanol (ayer). API publica,
+    sin clave y estable: cuando algo se vuelve viral (un animal, un fenomeno, un
+    descubrimiento) sube ahi. Gemini filtra solo lo que encaja con el canal."""
+    try:
+        ayer = datetime.datetime.utcnow() - datetime.timedelta(days=1)
+        url = ("https://wikimedia.org/api/rest_v1/metrics/pageviews/top/"
+               f"es.wikipedia/all-access/{ayer:%Y/%m/%d}")
+        r = requests.get(url, headers={"User-Agent": "MindBlownShorts/1.0 (educational channel)"}, timeout=30)
+        if r.status_code != 200:
+            print(f"Aviso tendencias Wikipedia: HTTP {r.status_code}", flush=True)
+            return ""
+        arts = r.json()["items"][0]["articles"]
+        titulos = [a["article"].replace("_", " ") for a in arts
+                   if ":" not in a["article"] and a["article"] != "Portada"][:120]
+        if not titulos:
+            return ""
+        prompt = (
+            "These are the most visited Spanish Wikipedia articles yesterday:\n" + "; ".join(titulos) +
+            "\n\nSelect up to 5 that are about animals, nature, science, space, the ocean, the human body, "
+            "dinosaurs/prehistory or world records and would make a fascinating fact video. Skip politics, "
+            "celebrities, sports matches, TV, crimes, people who are alive. Return ONLY a JSON list, no "
+            'markdown: [{"titulo_es": "article title", "topic_en": "English topic line"}]. Return [] if none fit.'
+        )
+        body = {"contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {"temperature": 0.2, "maxOutputTokens": 2048}}
+        for modelo in MODELOS_GEMINI:
+            try:
+                u = ("https://generativelanguage.googleapis.com/v1beta/models/"
+                     f"{modelo}:generateContent?key={GEMINI_API_KEY}")
+                g = requests.post(u, json=body, timeout=60)
+                if g.status_code != 200:
+                    continue
+                texto = g.json()["candidates"][0]["content"]["parts"][0]["text"]
+                m = re.search(r"\[.*\]", texto, re.S)
+                items = json.loads(m.group(0)) if m else []
+                usadas = _fuentes_usadas()
+                items = [i for i in items if isinstance(i, dict) and i.get("titulo_es")
+                         and i["titulo_es"].strip().lower() not in usadas][:5]
+                if not items:
+                    print("Tendencias Wikipedia: nada encaja con el canal hoy", flush=True)
+                    return ""
+                META["tendencias_es"] = [i["titulo_es"] for i in items]
+                print("Tendencias (Wikipedia ES): " + " | ".join(META["tendencias_es"]), flush=True)
+                lista = "\n".join(f"- {i['titulo_es']} (topic: {i.get('topic_en', '')})" for i in items)
+                return ("TOPICS SPANISH-SPEAKERS ARE SEARCHING FOR RIGHT NOW (most visited Spanish Wikipedia"
+                        " articles yesterday):\n" + lista +
+                        "\nBASE this video on ONE of them; it REPLACES the topic above. Write an ORIGINAL English"
+                        " script in your own words; use only facts you are highly confident about (never invent"
+                        " numbers). VIRAL FORMULA: apply the psychological pattern that makes people stop"
+                        " (counterintuitive claim, shocking number, direct question, strong emotion); the first"
+                        " 2 seconds must open a question the viewer needs answered. In the JSON, set"
+                        " \"tendencia_usada\" to the EXACT Spanish title you chose.\n")
+            except Exception as e:
+                print(f"Aviso tendencias Wikipedia ({modelo}): {e}", flush=True)
+    except Exception as e:
+        print(f"Aviso tendencias Wikipedia: {e}", flush=True)
+    return ""
 
 
 def obtener_tendencias_gemini() -> str:
@@ -559,7 +642,8 @@ TITLE RULES:
 - Vary the wording naturally — "Sound(s) Fake", "Defies Logic", "Will Shock You",
   "Nobody Believes" are all good options, but do not repeat the exact same
   phrase in every single title
-- Add {emoji} and #Shorts at end
+- Add {emoji} at the end (no hashtags in the title)
+- Make it a PROMISE or CONTRADICTION that opens a question (e.g. "Top 3 Animals That Shouldn't Exist")
 
 STRUCTURE: write exactly {formato_inicio} entries (numbered {formato_inicio} down to 1), one object each.
 For EACH entry give "escena": a stock-footage search phrase (2-4 words, ENGLISH) that literally
@@ -578,10 +662,10 @@ Return ONLY valid JSON, no markdown, no backticks:
 "hook": "...(under 8 words, stops scroll instantly)...",
 "entradas": [{{"n": {formato_inicio}, "texto": "...(1-2 punchy sentences, includes the number)...", "escena": "...(2-4 word stock footage phrase showing THIS fact)..."}}, "...continue one object per number down to n=1..."],
 "cierre": "...(closing line, max 14 words: comment a number + tease tomorrow + flows back into the hook)...",
-"titulo": "...(under 40 chars, starts with {formato_nombre} + {emoji} + #Shorts)...",
+"titulo": "...(under 40 chars, starts with {formato_nombre}, ends with {emoji})...",
 "miniatura": "...(3-5 words ALL CAPS, the single most shocking fact)...",
 "tendencia_usada": "...(exact Spanish trend title you based this on, or empty string)...",
-"tags": ["mindblown", "{formato_tag}", "viral", "shorts", "facts", "soundsfake", "science", "wow", "trivia", "mindblowing"]
+"tags": ["mindblown", "{formato_tag}", "facts", "...5-8 more tags SPECIFIC to this video: the animals, places or phenomena it mentions, no generic words..."]
 }}"""
 
 
@@ -656,7 +740,9 @@ def generar_contenido() -> tuple:
     pesos = [CATEGORIAS[k]["peso"] for k in claves]
     categoria_key = random.choices(claves, weights=pesos, k=1)[0]
     categoria = CATEGORIAS[categoria_key]
-    tema = random.choice(categoria["temas"])
+    recientes_t = {str(d.get("tema", "")) for d in _leer_registro()[-8:]}
+    opciones_t = [t for t in categoria["temas"] if t not in recientes_t] or categoria["temas"]
+    tema = random.choice(opciones_t)
     emoji = categoria["emoji_titulo"]
     formato = elegir_formato()
 
@@ -678,7 +764,7 @@ def generar_contenido() -> tuple:
         inspiracion=(
             ("VERIFIED FACTS PROVIDED BY THE EDITOR (use ONLY these facts, do not invent any other"
              " number or claim; rephrase them in your own words):\n" + datos_manual + "\n")
-            if (tema_manual and datos_manual) else ("" if tema_manual else obtener_tendencias())
+            if (tema_manual and datos_manual) else ("" if tema_manual else obtener_tendencias() + _bloque_recientes())
         ),
         formato_nombre=formato["nombre"],
         formato_inicio=formato["inicio"],
@@ -734,8 +820,17 @@ def generar_contenido() -> tuple:
                 print(f"Categoria: {categoria_key} | Tema: {tema}", flush=True)
                 print(f"Hook: {contenido.get('hook', '')}", flush=True)
                 contenido = normalizar_contenido(contenido)
+                tope = int(formato["palabras"].split("-")[1]) + 12
+                n_pal = len(str(contenido.get("guion", "")).split())
+                if n_pal > tope and intento == 0:
+                    print(f"Guion demasiado largo ({n_pal} > {tope} palabras): reintento mas corto", flush=True)
+                    time.sleep(3)
+                    continue
                 contenido = verificar_datos(contenido)
-                META["fuente_es"] = str(contenido.get("tendencia_usada", "")).strip()
+                usada = str(contenido.get("tendencia_usada", "")).strip()
+                # Solo vale si es uno de los temas reales que se le dieron (antes el modelo
+                # inventaba un "titulo en tendencia" aunque no hubiera ninguno).
+                META["fuente_es"] = usada if usada in META.get("tendencias_es", []) else ""
                 return contenido, categoria
             except Exception as e:
                 print(f"[{modelo} intento {intento+1}] Excepcion: {type(e).__name__}: {e}", flush=True)
@@ -1452,6 +1547,54 @@ def subir_youtube(video_path, titulo, descripcion, tags, miniatura_path=None,
     return video_id
 
 
+def limpiar_titulo(titulo: str) -> str:
+    """Titulo sin numero de episodio ni hashtags (gastan caracteres y no atraen)."""
+    t = re.sub(r"#\w+", "", titulo or "").strip()
+    t = re.sub(r"\s+", " ", t)
+    if not t:
+        t = "Top 3 Facts That Sound Fake 😱"
+    return t[:60]
+
+
+def construir_descripcion(contenido: dict, categoria: dict, episodio: int):
+    """Descripcion pensada para busqueda y conversion: gancho + resumen con palabras
+    clave en las primeras lineas, pregunta para comentarios, razon para seguir y
+    3-4 hashtags RELEVANTES (YouTube muestra hasta 3 sobre el titulo; hashtags sin
+    relacion pueden contar como metadatos enganosos)."""
+    hook = str(contenido.get("hook", "")).strip()
+    if hook and hook[-1] not in ".!?":
+        hook += "."
+    espec = list(categoria.get("tags_extra", []))
+    random.shuffle(espec)
+    hashtags = [f"#{espec[0]}", f"#{espec[1]}"] if len(espec) >= 2 else []
+    hashtags += ["#mindblown", "#shorts"]
+    nota = categoria.get("nota", "")
+    descripcion = (
+        f"{hook} {limpiar_titulo(contenido.get('titulo', ''))}".strip() + "\n\n"
+        f"{contenido.get('guion', '')}\n\n"
+        "💬 Which number shocked you the most? Tell me in the comments.\n"
+        "🔔 Follow MindBlown: a new mind-blowing countdown every day. Tomorrow's is wilder.\n\n"
+        + (f"{nota}\n\n" if nota else "")
+        + " ".join(hashtags)
+    )
+    return descripcion, hashtags
+
+
+def construir_tags(contenido: dict, categoria: dict) -> list:
+    """Tags de metadatos: especificos del video + nicho. Se quitan palabras genericas
+    (science, wow, records...) que no siempre tienen relacion con el contenido."""
+    base = ["mindblown", "facts", "shorts", "didyouknow", "mindblowingfacts", "trivia"]
+    propios = [str(t).strip().lstrip("#") for t in contenido.get("tags", []) if str(t).strip()]
+    combinados = list(dict.fromkeys(propios + categoria.get("tags_extra", []) + base))
+    tags, largo = [], 0
+    for t in combinados:
+        if largo + len(t) + 1 > 480:
+            break
+        tags.append(t)
+        largo += len(t) + 1
+    return tags
+
+
 def main():
     print("MindBlown - Pipeline Top 10 Viral Moments")
     episodio = leer_contador()
@@ -1502,43 +1645,9 @@ def main():
             base_mini, texto_miniatura, categoria["color_sub"]
         )
 
-    titulo_base = contenido.get("titulo", "10 Facts That Sound Fake 😱 #Shorts")
-    titulo = f"#{episodio} {titulo_base}"[:100]
-
-    # Hashtags VISIBLES en la descripcion: YouTube solo usa los primeros 3 para
-    # clasificar el Short, y un exceso de hashtags visibles en cada video puede
-    # leerse como spam. Los dejamos moderados (5) y variamos el orden.
-    HASHTAGS_BASE = ["#shorts", "#mindblown", "#facts"]
-    HASHTAGS_EXTRA = ["#soundsfake", "#viral", "#didyouknow", "#wow", "#incredible"]
-    hashtags_finales = HASHTAGS_BASE + random.sample(HASHTAGS_EXTRA, 2)
-
-    # Campo "tags" (metadata, NO visible al espectador): aqui SI conviene ser
-    # generoso y especifico, hasta el limite de 500 caracteres que exige YouTube.
-    tags_categoria = categoria.get("tags_extra", [])
-    tags_combinados = list(dict.fromkeys(
-        contenido.get("tags", []) + tags_categoria + [
-            "mindblown", "viral", "shorts", "facts",
-            "soundsfake", "incredible", "science", "amazing",
-            "wow", "nature", "records", "comparison",
-            "didyouknow", "mindblowingfacts", "trivia",
-        ]
-    ))
-    tags = []
-    largo_actual = 0
-    for t in tags_combinados:
-        if largo_actual + len(t) + 1 > 480:
-            break
-        tags.append(t)
-        largo_actual += len(t) + 1
-
-    nota = categoria.get("nota", "")
-    descripcion = (
-        f"MindBlown #{episodio}\n\n"
-        f"{contenido['guion']}\n\n"
-        f"🔥 Subscribe to MindBlown for daily mind-blowing facts.\n\n"
-        + (f"{nota}\n\n" if nota else "")
-        + f"{' '.join(hashtags_finales)}"
-    )
+    titulo = limpiar_titulo(contenido.get("titulo", ""))
+    descripcion, hashtags_finales = construir_descripcion(contenido, categoria, episodio)
+    tags = construir_tags(contenido, categoria)
     duracion = validar_video(video_path, audio_path)  # si falla, NO se publica
     video_id = subir_youtube(video_path, titulo, descripcion, tags, miniatura_path,
                              sintetico=bool(imagenes_ia))
