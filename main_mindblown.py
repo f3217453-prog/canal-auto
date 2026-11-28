@@ -15,6 +15,8 @@ import requests
 import asyncio
 import json
 import base64
+import xml.etree.ElementTree as ET
+from urllib.parse import quote
 import edge_tts
 import whisper
 from PIL import Image, ImageDraw, ImageFont
@@ -304,6 +306,7 @@ def obtener_tendencias() -> str:
     """Tendencias de HOY, todo automatico: 1) API de YouTube (vistas/hora) si hay
     YOUTUBE_API_KEY; 2) si no hay clave o falla, Gemini con busqueda de Google."""
     for nombre, fn in (("youtube", obtener_tendencias_youtube),
+                       ("rss", obtener_tendencias_rss),
                        ("wikipedia", obtener_tendencias_wikipedia),
                        ("gemini", obtener_tendencias_gemini)):
         texto = fn()
@@ -363,6 +366,97 @@ def _bloque_recientes(n: int = 14) -> str:
     lista = "\n".join(f"- {t}" for t in titulos)
     return ("ALREADY PUBLISHED RECENTLY (do NOT repeat these subjects or animals; pick something"
             " clearly different):\n" + lista + "\n")
+
+
+FEEDS_TRENDS_GEO = ["MX", "ES", "AR", "CO"]
+BUSQUEDAS_NOTICIAS = [
+    "animales", "descubren especie", "ciencia descubrimiento", "récord mundial",
+    "fenómeno natural", "océano criatura", "espacio astronomía", "cuerpo humano científicos",
+]
+_UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) MindBlownShorts/1.0"}
+
+
+def _titulos_rss(url: str) -> list:
+    """Titulos de un feed RSS (sirve para Google Trends y Google News; tolera
+    cualquier espacio de nombres y devuelve [] si algo falla)."""
+    try:
+        r = requests.get(url, headers=_UA, timeout=15)
+        if r.status_code != 200:
+            print(f"Aviso RSS {url[:70]}: HTTP {r.status_code}", flush=True)
+            return []
+        raiz = ET.fromstring(r.content)
+        out = []
+        for it in raiz.iter():
+            etiqueta = it.tag.split("}")[-1]
+            if etiqueta in ("title", "news_item_title") and it.text:
+                t = re.sub(r"\s+-\s+[^-]{2,40}$", "", it.text.strip())  # quita " - Medio"
+                if t and t.lower() not in ("google news", "trending searches", "daily search trends"):
+                    out.append(t)
+        return out
+    except Exception as e:
+        print(f"Aviso RSS {url[:70]}: {e}", flush=True)
+        return []
+
+
+def obtener_tendencias_rss() -> str:
+    """Lo MAS reciente (horas, no dias): 'Tendencias' de Google en varios paises
+    hispanohablantes + titulares de Google Noticias de las ultimas 24 h sobre
+    animales, ciencia, naturaleza y records. Feeds RSS publicos, sin clave.
+    Gemini convierte los titulares en TEMAS atemporales (no noticias)."""
+    titulos = []
+    for geo in FEEDS_TRENDS_GEO:
+        titulos += _titulos_rss(f"https://trends.google.com/trending/rss?geo={geo}")
+    for q in random.sample(BUSQUEDAS_NOTICIAS, 4):
+        gl = random.choice([("MX", "es-419"), ("ES", "es"), ("AR", "es-419")])
+        url = (f"https://news.google.com/rss/search?q={quote(q + ' when:1d')}"
+               f"&hl={gl[1]}&gl={gl[0]}&ceid={gl[0]}:{gl[1]}")
+        titulos += _titulos_rss(url)
+    titulos = list(dict.fromkeys(titulos))[:160]
+    if len(titulos) < 5:
+        print("Tendencias RSS: pocos titulares, se omite", flush=True)
+        return ""
+    prompt = (
+        "These are headlines and trending searches from the last hours in Spanish-speaking countries:\n"
+        + "; ".join(titulos) +
+        "\n\nSelect up to 5 that point to a TIMELESS fascinating subject about animals, nature, science, "
+        "space, the ocean, the human body, prehistory or world records (e.g. a headline about a new "
+        "deep-sea species -> topic: deep-sea creatures). Skip politics, celebrities, sports matches, "
+        "TV, crimes, accidents, tragedies, anything about living people. Return ONLY a JSON list, no "
+        'markdown: [{"titulo_es": "the exact headline or search term", "topic_en": "English topic line"}]. '
+        "Return [] if none fit."
+    )
+    body = {"contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 2048}}
+    for modelo in MODELOS_GEMINI:
+        try:
+            u = ("https://generativelanguage.googleapis.com/v1beta/models/"
+                 f"{modelo}:generateContent?key={GEMINI_API_KEY}")
+            g = requests.post(u, json=body, timeout=60)
+            if g.status_code != 200:
+                continue
+            texto = g.json()["candidates"][0]["content"]["parts"][0]["text"]
+            m = re.search(r"\[.*\]", texto, re.S)
+            items = json.loads(m.group(0)) if m else []
+            usadas = _fuentes_usadas()
+            items = [i for i in items if isinstance(i, dict) and i.get("titulo_es")
+                     and i["titulo_es"].strip().lower() not in usadas][:5]
+            if not items:
+                print("Tendencias RSS: nada encaja con el canal ahora mismo", flush=True)
+                return ""
+            META["tendencias_es"] = [i["titulo_es"] for i in items]
+            print("Tendencias (RSS hoy): " + " | ".join(META["tendencias_es"]), flush=True)
+            lista = "\n".join(f"- {i['titulo_es']} (topic: {i.get('topic_en', '')})" for i in items)
+            return ("WHAT SPANISH-SPEAKING PEOPLE ARE READING AND SEARCHING RIGHT NOW (last hours):\n" + lista +
+                    "\nBASE this video on ONE of them; it REPLACES the topic above. Do not report the news: make"
+                    " an ORIGINAL English countdown about the fascinating subject behind it, in your own words,"
+                    " using only facts you are highly confident about (never invent numbers). Open with the"
+                    " timely angle ('everyone is talking about...') only if it is true. VIRAL FORMULA: apply the"
+                    " psychological pattern that makes people stop (counterintuitive claim, shocking number,"
+                    " direct question, strong emotion); the first 2 seconds must open a question the viewer"
+                    " needs answered. In the JSON, set \"tendencia_usada\" to the EXACT text you chose.\n")
+        except Exception as e:
+            print(f"Aviso tendencias RSS ({modelo}): {e}", flush=True)
+    return ""
 
 
 def obtener_tendencias_wikipedia() -> str:
